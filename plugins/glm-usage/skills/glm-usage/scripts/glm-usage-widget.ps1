@@ -101,12 +101,19 @@ function Format-Reset($ms) {
 function Invoke-Refresh {
   $Title.Text = 'GLM Coding Plan 用量 · 获取中...'
   $Title.Foreground = Brush '#9AA4B2'
-  $json = & node $scriptPath --json 2>$null | Out-String
-  if (-not $json.Trim()) {
-    $Title.Text = 'GLM Coding Plan 用量 · 获取失败(右键立即刷新重试)'
+  $raw = (& node $scriptPath --json 2>&1 | Out-String).Trim()
+  $d = $null
+  if ($raw) { try { $d = $raw | ConvertFrom-Json } catch { $d = $null } }
+  if (-not $d -or -not $d.quota) {
+    if ($raw -match '401') {
+      $Title.Text = '⚡ API Key 已失效或被更换 · 请在 ZCode 设置中更新,修复后自动恢复'
+    } elseif ($raw) {
+      $Title.Text = '⚡ 获取失败:' + (($raw -split "`r?`n")[0])
+    } else {
+      $Title.Text = '⚡ 获取失败(右键可立即重试)'
+    }
     return
   }
-  $d = $json | ConvertFrom-Json
   $q = $d.quota
   foreach ($l in $q.limits) {
     if ($l.type -eq 'TIME_LIMIT') {
@@ -124,8 +131,10 @@ function Invoke-Refresh {
   $Title.Text = "⚡ GLM Coding Plan 用量 · {0} · 更新于 {1}" -f $q.level.ToUpper(), (Get-Date -Format 'HH:mm')
 }
 
+# 自动刷新间隔(分钟),按需调整
+$refreshMinutes = 10
 $timer = New-Object System.Windows.Threading.DispatcherTimer
-$timer.Interval = [TimeSpan]::FromMinutes(5)
+$timer.Interval = [TimeSpan]::FromMinutes($refreshMinutes)
 $timer.Add_Tick({ Invoke-Refresh })
 
 $win.Add_MouseLeftButtonDown({
