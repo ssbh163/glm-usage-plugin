@@ -18,7 +18,7 @@ $xamlText = @'
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="GLM Usage" Topmost="True" WindowStyle="None" AllowsTransparency="True"
         Background="#E6141418" ShowInTaskbar="False" ResizeMode="NoResize"
-        Width="342" Height="188" Opacity="0.96">
+        Width="342" Height="208" Opacity="0.96">
   <Window.ContextMenu>
     <ContextMenu>
       <MenuItem x:Name="MenuRefresh" Header="立即刷新"/>
@@ -27,13 +27,18 @@ $xamlText = @'
       <MenuItem x:Name="MenuExit" Header="退出"/>
     </ContextMenu>
   </Window.ContextMenu>
-  <StackPanel Margin="14,10">
-    <TextBlock x:Name="Title" Foreground="#9AA4B2" FontSize="11" Margin="0,0,0,7"/>
-    <TextBlock x:Name="Row5h"   FontSize="13" Margin="0,2" FontFamily="Cascadia Mono,Consolas,Microsoft YaHei UI"/>
-    <TextBlock x:Name="RowWeek" FontSize="13" Margin="0,2" FontFamily="Cascadia Mono,Consolas,Microsoft YaHei UI"/>
-    <TextBlock x:Name="RowMcp"  FontSize="13" Margin="0,2" FontFamily="Cascadia Mono,Consolas,Microsoft YaHei UI"/>
-    <TextBlock x:Name="Row24" Foreground="#9AA4B2" FontSize="11" Margin="0,8,0,0" TextWrapping="Wrap"/>
-  </StackPanel>
+  <Grid>
+    <TextBlock x:Name="CloseBtn" Text="✕" FontSize="10" Foreground="#6B7280"
+               HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,6,6,0"
+               Cursor="Hand" ToolTip="关闭悬浮窗(右键菜单有更多选项)"/>
+    <StackPanel Margin="14,10,24,10">
+      <TextBlock x:Name="Title" Foreground="#9AA4B2" FontSize="11" Margin="0,0,0,7"/>
+      <TextBlock x:Name="Row5h"   FontSize="13" Margin="0,2" FontFamily="Cascadia Mono,Consolas,Microsoft YaHei UI"/>
+      <TextBlock x:Name="RowWeek" FontSize="13" Margin="0,2" FontFamily="Cascadia Mono,Consolas,Microsoft YaHei UI"/>
+      <TextBlock x:Name="RowMcp"  FontSize="13" Margin="0,2" FontFamily="Cascadia Mono,Consolas,Microsoft YaHei UI"/>
+      <TextBlock x:Name="Row24" Foreground="#9AA4B2" FontSize="11" Margin="0,8,0,0" TextWrapping="Wrap"/>
+    </StackPanel>
+  </Grid>
 </Window>
 '@
 
@@ -43,6 +48,7 @@ $Row5h   = $win.FindName('Row5h')
 $RowWeek = $win.FindName('RowWeek')
 $RowMcp  = $win.FindName('RowMcp')
 $Row24   = $win.FindName('Row24')
+$CloseBtn = $win.FindName('CloseBtn')
 
 # 初始位置:主屏工作区右上角
 $wa = [System.Windows.SystemParameters]::WorkArea
@@ -60,21 +66,36 @@ function Add-Run($tb, $text, $color, $size) {
   if ($size) { $r.FontSize = $size }
   $tb.Inlines.Add($r)
 }
-function Set-Row($tb, $label, $pct, $suffix) {
+function PadW([string]$s, [int]$w) {
+  $len = 0
+  foreach ($ch in $s.ToCharArray()) { if ([int]$ch -gt 127) { $len += 2 } else { $len += 1 } }
+  return $s + (' ' * [Math]::Max(0, $w - $len))
+}
+function Set-Row($tb, $label, $pct, $subline) {
   $p = [double]$pct
   $filled = [int][Math]::Round($p / 100 * 14)
   $bar = ('▰' * $filled) + ('▱' * (14 - $filled))
   $tb.Inlines.Clear()
-  Add-Run $tb ("  {0,-10}" -f $label) '#9AA4B2' $null
+  Add-Run $tb ('  ' + (PadW $label 10)) '#C0C8D4' $null
   Add-Run $tb "$bar  " (RateColor $p) $null
   Add-Run $tb ("{0,5:F1}%" -f $p) (RateColor $p) $null
-  if ($suffix) { Add-Run $tb "  $suffix" '#6B7280' 11 }
+  if ($subline) {
+    $tb.Inlines.Add((New-Object System.Windows.Documents.LineBreak))
+    Add-Run $tb "      $subline" '#6B7280' 11
+  }
+}
+function Format-Clock($ms) {
+  if (-not $ms -or $ms -le 0) { return '' }
+  [DateTimeOffset]::FromUnixTimeMilliseconds($ms).LocalDateTime.ToString('MM/dd HH:mm')
 }
 function Format-Reset($ms) {
   if (-not $ms -or $ms -le 0) { return '' }
-  $diff = [DateTimeOffset]::FromUnixTimeMilliseconds($ms) - [DateTimeOffset]::Now
-  $t = $diff.ToString('d\.hh\:mm')
-  return "{0} 后重置" -f ($t -replace '^0\.', '')
+  $span = [DateTimeOffset]::FromUnixTimeMilliseconds($ms) - [DateTimeOffset]::Now
+  $parts = @()
+  if ($span.Days) { $parts += ("{0} 天" -f $span.Days) }
+  if ($span.Hours) { $parts += ("{0} 小时" -f $span.Hours) }
+  if ($span.Minutes -or ($span.Days -eq 0 -and $span.Hours -eq 0)) { $parts += ("{0} 分钟" -f $span.Minutes) }
+  return ($parts -join ' ') + '后'
 }
 
 function Invoke-Refresh {
@@ -88,13 +109,12 @@ function Invoke-Refresh {
   $d = $json | ConvertFrom-Json
   $q = $d.quota
   foreach ($l in $q.limits) {
-    $reset = Format-Reset $l.nextResetTime
     if ($l.type -eq 'TIME_LIMIT') {
-      Set-Row $RowMcp 'MCP 本月' $l.percentage ("{0}/{1} 次" -f $l.currentValue, $l.usage)
+      Set-Row $RowMcp 'MCP 本月' $l.percentage ("已用 {0}/{1} 次 · 剩余 {2}" -f $l.currentValue, $l.usage, $l.remaining)
     } elseif ($l.unit -eq 3) {
-      Set-Row $Row5h '5 小时池' $l.percentage $reset
+      Set-Row $Row5h '5 小时池' $l.percentage ("↻ {0} · {1}重置" -f (Format-Clock $l.nextResetTime), (Format-Reset $l.nextResetTime))
     } elseif ($l.unit -eq 6) {
-      Set-Row $RowWeek '每周额度' $l.percentage $reset
+      Set-Row $RowWeek '每周额度' $l.percentage ("↻ {0} · {1}重置" -f (Format-Clock $l.nextResetTime), (Format-Reset $l.nextResetTime))
     }
   }
   $t = $d.modelUsage.totalUsage
@@ -108,7 +128,14 @@ $timer = New-Object System.Windows.Threading.DispatcherTimer
 $timer.Interval = [TimeSpan]::FromMinutes(5)
 $timer.Add_Tick({ Invoke-Refresh })
 
-$win.Add_MouseLeftButtonDown({ $win.DragMove() })
+$win.Add_MouseLeftButtonDown({
+  if ($_.OriginalSource -ne $CloseBtn) { $win.DragMove() }
+})
+
+# 左上角 ✕ 关闭按钮:悬停变红,点击退出
+$CloseBtn.Add_MouseEnter({ $CloseBtn.Foreground = Brush '#F14C4C' })
+$CloseBtn.Add_MouseLeave({ $CloseBtn.Foreground = Brush '#6B7280' })
+$CloseBtn.Add_MouseLeftButtonUp({ $timer.Stop(); $win.Close(); [Environment]::Exit(0) })
 
 # ContextMenu 内的元素在独立名称域,不能通过 Window.FindName 找,按 Header 索引
 $menuItems = @{}
