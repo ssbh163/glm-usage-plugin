@@ -5,6 +5,12 @@ $ErrorActionPreference = 'SilentlyContinue'
 Add-Type -AssemblyName PresentationFramework, PresentationCore, WindowsBase
 
 $scriptPath = Join-Path $env:USERPROFILE '.zcode\scripts\glm-usage.mjs'
+# 若未 --install 过,退回到插件缓存中的脚本(取最高版本)
+if (-not (Test-Path $scriptPath)) {
+  $cached = Get-ChildItem "$env:USERPROFILE\.zcode\cli\plugins\cache\*\glm-usage\*\skills\glm-usage\scripts\glm-usage.mjs" |
+    Sort-Object FullName -Descending | Select-Object -First 1
+  if ($cached) { $scriptPath = $cached.FullName }
+}
 $ps1Path    = Join-Path $env:USERPROFILE '.zcode\scripts\glm-usage-widget.ps1'
 
 $xamlText = @'

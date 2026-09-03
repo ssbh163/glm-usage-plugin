@@ -1,71 +1,176 @@
-# glm-usage —— ZCode 插件:查询智谱 Coding Plan 额度
+# glm-usage —— 在 ZCode 中查看智谱 Coding Plan 额度
 
-在 ZCode 中用智谱(Coding Plan)**API Key 登录**时,端内看不到 5 小时池和每周额度。本插件通过智谱官方监控接口(`/api/monitor/usage/*`,与官方 glm-plan-usage 插件同源)查询并展示全部额度:
+在 ZCode 中用智谱(Coding Plan)**API Key 登录**时,端内看不到 5 小时池和每周额度。这个插件通过智谱官方监控接口(与官方 glm-plan-usage 插件同源)把额度带回来:
 
-- **5 小时 Prompt 池**:已用百分比、重置倒计时
-- **每周额度**:已用百分比、重置时间
-- **MCP 工具调用(每月)**:已用/总量、明细
-- **近 24 小时模型用量**:调用次数、token 消耗、按模型汇总
+| 显示项 | 内容 |
+|---|---|
+| ⏱ 5 小时 Prompt 池 | 已用百分比、重置倒计时 |
+| 📅 每周额度 | 已用百分比、重置时间 |
+| 🔧 MCP 工具调用(每月) | 已用/总量、各工具明细 |
+| 📊 近 24 小时用量 | 调用次数、token 消耗、按模型汇总 |
 
-**隐私**:插件不含任何密钥,脚本运行时才从你本机 ZCode 配置(`~/.zcode/v2/config.json`)读取你自己的 API Key,只发往智谱官方域名(open.bigmodel.cn / api.z.ai)。
+## 效果预览
+
+```
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ ⚡ GLM Coding Plan 用量
+    PRO 套餐 · open.bigmodel.cn · 2026/9/3 20:20
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+ 🕐  5 小时 Prompt 池      ▰▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱  6.0%
+      剩余 94.0%
+      ↻ 09/04 00:36 重置(4 小时 16 分钟后)
+
+ 📅  每周额度              ▰▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱  4.0%
+      剩余 96.0%
+      ↻ 09/09 18:04 重置(5 天 21 小时后)
+
+ 🔧  MCP 工具调用(1个月)   ▰▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱  3.0%
+      已用 30 / 1,000 次 · 剩余 970
+      ↻ 09/22 18:04 重置(18 天 21 小时后)
+      search-prime 25 · web-reader 2 · zread 3
+
+ 📊  近 24 小时模型用量    222 次 · 1274.5 万 tokens
+```
+
+在支持颜色的终端中,进度条按用量自动变色:<50% 绿色、50–80% 黄色、≥80% 红色。
+
+## 前提条件
+
+- [ZCode](https://zcode.z.ai) 桌面版
+- 已在 ZCode 中配置智谱 Coding Plan 的 **API Key**(设置 → 模型,插件自动读取,无需手动填)
+- Node.js ≥ 18(终端输入 `node -v` 检查)
 
 ## 安装
 
-### 方式 A:从本地目录安装
+### 方式 A · 从 GitHub 安装(推荐)
 
-1. ZCode → 设置 → 插件管理 → 发现(Discover)页
-2. 点 **+** 添加市场,选择"本地目录",选中本仓库根目录
-3. 在市场列表中找到 **glm-usage**,点击安装
+1. ZCode 左侧栏 → **插件市场** → **发现** 页
+2. 点右上角 **+** 添加插件市场,选择 **GitHub 仓库**,填入本仓库地址
+3. 在市场列表中找到 **glm-usage**,点 **获取/安装**
 
-### 方式 B:从 GitHub 安装(推荐分享方式)
+> 国内网络克隆失败时,先设置环境变量 `ZCODE_HTTP_PROXY=http://host:port` 再重试(ZCode 只认这个变量,不吃普通的 http_proxy)。
 
-把本仓库推到 GitHub 后:
+### 方式 B · 本地安装
 
-1. ZCode → 设置 → 插件管理 → 发现 → **+** 添加市场
-2. 选择 GitHub 仓库,填入仓库地址(如 `你的用户名/glm-usage-plugin`)
+1. 下载本仓库(绿色按钮 Code → Download ZIP)并解压
+2. ZCode → 插件市场 → 发现 → **+** → **本地目录**,选中解压后的**仓库根目录**(即包含 `marketplace.json` 的那一层)
 3. 安装 **glm-usage**
+
+### 方式 C · 只用脚本,不装插件
+
+下载 [glm-usage.mjs](plugins/glm-usage/skills/glm-usage/scripts/glm-usage.mjs) 单文件,运行:
+
+```bash
+node glm-usage.mjs --install
+```
+
+会自动把脚本装到 `~/.zcode/scripts/`、把 `/usage` 命令装到 `~/.zcode/commands/`。功能与插件基本相同(少一个 `/glm-usage:usage` 命令名)。
 
 ## 使用
 
-安装后**新开一个对话**:
+### 1. ZCode 对话内
 
-- 输入 `/glm-usage:usage`,或直接问"查一下 Coding Plan 用量/还剩多少额度"
-- 也可以在终端直接运行脚本:
+安装插件后**新开一个对话**(命令在会话启动时加载):
+
+- 输入 `/glm-usage:usage`
+- 或直接问:"查一下 Coding Plan 用量""5 小时池还剩多少""周额度什么时候重置"
+
+助手会运行脚本并把结果整理成表格。
+
+### 2. 终端直接运行
+
+```bash
+node ~/.zcode/scripts/glm-usage.mjs            # 卡片式输出
+node ~/.zcode/scripts/glm-usage.mjs --json     # 原始 JSON
+```
+
+插件安装者也可以直接用插件缓存里的脚本(免 --install):
 
 ```bash
 node "$(ls -d "$HOME/.zcode/cli/plugins/cache"/*/glm-usage/*/skills/glm-usage/scripts/glm-usage.mjs | sort -V | tail -1)"
 ```
 
-脚本可独立使用(不需要装插件),支持 `--json`、`--key`、`--base`、`--install` 参数,详见脚本头部注释。
+### 3. 桌面悬浮窗(Windows,常驻显示)
 
-## 常驻显示(不用每次对话调用)
+置顶小窗常驻桌面,每 5 分钟自动刷新,可拖动,右键菜单支持"立即刷新 / 开机自启 / 退出":
 
-1. **桌面悬浮窗(Windows)**:运行 `scripts/glm-usage-widget.ps1`(`powershell -ExecutionPolicy Bypass -File ...`)。
-   置顶小窗显示全部额度,每 5 分钟自动刷新,可拖动;右键菜单可"立即刷新 / 开机自启 / 退出"。零依赖(系统自带 PowerShell)。
-2. **会话自动注入**:脚本带 `--hook` 模式,输出 SessionStart hook 的 `additionalContext` JSON,
-   在 `~/.zcode/cli/config.json` 配置 hooks 后,每个新会话自动带上一行额度摘要。
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File "$env:USERPROFILE\.zcode\scripts\glm-usage-widget.ps1"
+```
 
-## 前提条件
+(纯插件用户把路径换成插件目录里的 `scripts/glm-usage-widget.ps1` 即可;脚本找不到 `~/.zcode/scripts/glm-usage.mjs` 时会自动定位插件缓存中的副本。)
 
-- Node.js >= 18
-- ZCode 中已配置智谱 Coding Plan 的 API Key(自动读取,无需手动填)
-- 不用 ZCode 的场景:设置 `ANTHROPIC_AUTH_TOKEN` + `ANTHROPIC_BASE_URL` 环境变量,或用 `--key`/`--base` 传参
+### 4. 新会话自动注入(可选进阶)
 
-## 说明
+脚本带 `--hook` 模式,配合 ZCode 的 SessionStart hook,每个新对话自动带上一行额度摘要。先 `--install` 脚本,再编辑 `~/.zcode/cli/config.json`,加入:
 
-- 额度字段按接口实测解读:`TOKENS_LIMIT`(5 小时/每周)、`TIME_LIMIT`(MCP 每月)
-- 走的是智谱未公开文档的监控接口,官方若调整接口,更新 `scripts/glm-usage.mjs` 中的字段映射即可
-- 兼容 `.claude-plugin` 清单格式,理论上也可被 Claude Code 类工具识别
+```json
+{
+  "hooks": {
+    "enabled": true,
+    "events": {
+      "SessionStart": [
+        {
+          "hooks": [
+            {
+              "type": "process",
+              "command": "node 可执行文件完整路径",
+              "args": ["C:/Users/你的用户名/.zcode/scripts/glm-usage.mjs", "--hook"],
+              "timeoutMs": 15000
+            }
+          ]
+        }
+      ]
+    }
+  }
+}
+```
+
+`command` 填 node 的绝对路径(终端 `where node` 可查,注意用正斜杠 `/`)。
+
+## 隐私与安全
+
+- 插件**不含任何密钥**。脚本运行时从本机 ZCode 配置(`~/.zcode/v2/config.json`)读取你自己的 API Key
+- 请求只发往智谱官方域名(`open.bigmodel.cn` / `api.z.ai`),不经过任何第三方服务器
+- 查询走官方监控接口,不消耗 prompt 额度
+
+## 常见问题
+
+**Q:提示"未找到 Coding Plan API Key"?**
+先在 ZCode 设置里配好智谱 Coding Plan 的 API Key;或设置环境变量 `ANTHROPIC_AUTH_TOKEN` + `ANTHROPIC_BASE_URL`,或运行时传 `--key <apiKey> --base <baseURL>`。
+
+**Q:HTTP 401?**
+API Key 无效或过期,去智谱开放平台重新获取。
+
+**Q:不用 ZCode,能在 Claude Code 里用吗?**
+可以。设置 `ANTHROPIC_AUTH_TOKEN=https://open.bigmodel.cn/api/anthropic` 对应的环境变量后直接跑脚本(国际站用 `https://api.z.ai/api/anthropic`)。
+
+**Q:额度数字和网页后台对不上?**
+查询接口是智谱未公开文档的监控接口,官方若调整字段,更新脚本中的映射即可(`TOKENS_LIMIT` unit=3 是 5 小时池、unit=6 是每周,`TIME_LIMIT` 是 MCP 每月)。
 
 ## 目录结构
 
 ```
 glm-usage-plugin/                       ← 市场仓库根目录
 ├── .zcode-plugin/marketplace.json      ← 市场清单
+├── marketplace.json                    ← 根目录副本(兼容不同读取位置)
 └── plugins/glm-usage/                  ← 插件本体
     ├── .zcode-plugin/plugin.json
     ├── commands/usage.md               ← /glm-usage:usage 命令
     └── skills/glm-usage/
         ├── SKILL.md
-        └── scripts/glm-usage.mjs       ← 查询脚本(零依赖)
+        └── scripts/
+            ├── glm-usage.mjs           ← 查询脚本(零依赖)
+            └── glm-usage-widget.ps1    ← Windows 桌面悬浮窗
 ```
+
+## 卸载
+
+- 插件:设置 → 插件管理 → 已安装 → glm-usage → 卸载
+- 脚本:删除 `~/.zcode/scripts/glm-usage.mjs` 和 `~/.zcode/commands/usage.md`
+- 悬浮窗开机自启:悬浮窗右键 → 再点一次"开机自启"即可取消
+
+## License
+
+MIT
