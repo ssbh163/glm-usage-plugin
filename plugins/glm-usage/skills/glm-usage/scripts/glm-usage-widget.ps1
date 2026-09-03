@@ -219,22 +219,18 @@ $win.Add_SourceInitialized({
   })
 })
 
-# ZCode 启动检测:出现新的 ZCode 进程 = 一次真正的启动(后台已运行时打开窗口不产生新进程,不算)
-# 检测到启动时把悬浮窗唤起到前台
-$zcodeSeen = @{}
-foreach ($p in (Get-Process -Name 'ZCode' -ErrorAction SilentlyContinue)) { $zcodeSeen[$p.Id] = $true }
+# ZCode 启动检测:从"没有任何 ZCode 进程"变为"有"才算一次真正的启动。
+# 不能按"出现新 PID"判断——Electron 应用常驻多个同名子进程且动态回收重建,会频繁误唤起。
+$script:zcodeWasRunning = [bool](Get-Process -Name 'ZCode' -ErrorAction SilentlyContinue)
 $zcodeTimer = New-Object System.Windows.Threading.DispatcherTimer
 $zcodeTimer.Interval = [TimeSpan]::FromMilliseconds(2000)
 $zcodeTimer.Add_Tick({
-  $alive = @{}
-  foreach ($p in (Get-Process -Name 'ZCode' -ErrorAction SilentlyContinue)) {
-    $alive[$p.Id] = $true
-    if (-not $zcodeSeen.ContainsKey($p.Id)) {
-      if (-not $win.IsVisible) { $win.Show() }
-      $win.Activate()
-    }
+  $running = [bool](Get-Process -Name 'ZCode' -ErrorAction SilentlyContinue)
+  if ($running -and -not $script:zcodeWasRunning) {
+    if (-not $win.IsVisible) { $win.Show() }
+    $win.Activate()
   }
-  $zcodeSeen = $alive
+  $script:zcodeWasRunning = $running
 })
 $zcodeTimer.Start()
 
