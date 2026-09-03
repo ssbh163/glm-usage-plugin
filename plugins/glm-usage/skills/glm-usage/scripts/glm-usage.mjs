@@ -82,17 +82,10 @@ if (argv.includes('--install')) {
     const startupDir = path.join(home, 'AppData', 'Roaming', 'Microsoft', 'Windows', 'Start Menu', 'Programs', 'Startup');
     fs.mkdirSync(startupDir, { recursive: true });
     fs.writeFileSync(path.join(startupDir, 'glm-usage-widget.vbs'), vbs, 'ascii');
-    // 桌面快捷方式(.lnk 已存在则跳过,避免重复)
-    const desktopDir = path.join(home, 'Desktop');
-    const desktopVbs = path.join(desktopDir, 'GLM 用量悬浮窗.vbs');
-    if (fs.existsSync(desktopDir) && !fs.existsSync(desktopVbs)
-      && !fs.existsSync(path.join(desktopDir, 'GLM 用量悬浮窗.lnk'))) {
-      fs.writeFileSync(desktopVbs, vbs, 'ascii');
-    }
     // 立即弹出悬浮窗(已有实例在运行时,会自动唤起到前台)
     spawn('wscript.exe', [launchVbs], { detached: true, stdio: 'ignore', windowsHide: true }).unref();
     console.log('  悬浮窗 -> 已安装并启动(置顶显示,每 10 分钟刷新)');
-    console.log('           ✕ 或 Ctrl+Alt+U 隐藏,Ctrl+Alt+U / 双击桌面图标唤回');
+    console.log('           隐藏/唤回:Ctrl+G 全局快捷键;启动 ZCode 时也会自动唤起');
     console.log('           开机自启已开启(悬浮窗右键菜单可关闭)');
   } else if (process.platform === 'win32') {
     console.log('  悬浮窗 -> 未安装(当前目录没有 glm-usage-widget.ps1;从完整 zip 安装可获得)');

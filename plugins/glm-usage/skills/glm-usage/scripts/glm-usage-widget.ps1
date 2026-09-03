@@ -45,7 +45,7 @@ $xamlText = @'
   <Grid>
     <TextBlock x:Name="CloseBtn" Text="✕" FontSize="14" FontWeight="Bold" Foreground="#B7C0CD"
                HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,8,10,0"
-               Cursor="Hand" ToolTip="隐藏悬浮窗(Ctrl+Alt+U 或双击桌面图标可唤回;右键菜单可彻底退出)"/>
+               Cursor="Hand" ToolTip="隐藏悬浮窗(Ctrl+G 或启动 ZCode 时唤回;右键菜单可彻底退出)"/>
     <StackPanel Margin="14,10,24,10">
       <TextBlock x:Name="Title" Foreground="#9AA4B2" FontSize="11" Margin="0,0,0,7"/>
       <TextBlock x:Name="Row5h"   FontSize="13" Margin="0,2" FontFamily="Cascadia Mono,Consolas,Microsoft YaHei UI"/>
@@ -201,11 +201,13 @@ $menuItems['开机自启(点击切换)'].Add_Click({
   }
 })
 
-# 全局快捷键 Ctrl+Alt+U:显示/隐藏悬浮窗(隐藏时进程驻留,数据继续刷新)
+# 全局快捷键(可改):0x2=Ctrl,0x1=Alt,0x4=Shift 可组合;G=0x47
+$hotkeyModifiers = 0x2
+$hotkeyKey = 0x47
 $script:helper = $null
 $win.Add_SourceInitialized({
   $script:helper = New-Object System.Windows.Interop.WindowInteropHelper($win)
-  [void][GLMNative.Hotkey]::RegisterHotKey($script:helper.Handle, 0xB001, 0x3, 0x55)
+  [void][GLMNative.Hotkey]::RegisterHotKey($script:helper.Handle, 0xB001, $script:hotkeyModifiers, $script:hotkeyKey)
   $src = [System.Windows.Interop.HwndSource]::FromHwnd($script:helper.Handle)
   $src.AddHook({
     param($hwnd, $msg, $wParam, $lParam, [ref]$handled)
@@ -216,6 +218,25 @@ $win.Add_SourceInitialized({
     [IntPtr]::Zero
   })
 })
+
+# ZCode 启动检测:出现新的 ZCode 进程 = 一次真正的启动(后台已运行时打开窗口不产生新进程,不算)
+# 检测到启动时把悬浮窗唤起到前台
+$zcodeSeen = @{}
+foreach ($p in (Get-Process -Name 'ZCode' -ErrorAction SilentlyContinue)) { $zcodeSeen[$p.Id] = $true }
+$zcodeTimer = New-Object System.Windows.Threading.DispatcherTimer
+$zcodeTimer.Interval = [TimeSpan]::FromMilliseconds(2000)
+$zcodeTimer.Add_Tick({
+  $alive = @{}
+  foreach ($p in (Get-Process -Name 'ZCode' -ErrorAction SilentlyContinue)) {
+    $alive[$p.Id] = $true
+    if (-not $zcodeSeen.ContainsKey($p.Id)) {
+      if (-not $win.IsVisible) { $win.Show() }
+      $win.Activate()
+    }
+  }
+  $zcodeSeen = $alive
+})
+$zcodeTimer.Start()
 
 # 已有实例被再次"启动"时(如双击桌面图标),通过命名事件把窗口调到前台。
 # 注意:不能用 ThreadPool 回调(无 runspace 的线程上运行 scriptblock 会崩进程),
