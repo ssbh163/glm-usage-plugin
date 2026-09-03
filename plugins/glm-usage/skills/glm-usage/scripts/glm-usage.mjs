@@ -20,6 +20,7 @@ import { fileURLToPath } from 'node:url';
 
 const argv = process.argv.slice(2);
 const asJson = argv.includes('--json');
+const asHook = argv.includes('--hook');
 const flagValue = (name) => {
   const i = argv.indexOf(name);
   return i >= 0 ? argv[i + 1] : undefined;
@@ -215,6 +216,23 @@ const rule = (ch) => c('2;36', ch.repeat(50));
 // ---------- 主流程 ----------
 async function main() {
   const quota = await get('/api/monitor/usage/quota/limit');
+
+  // SessionStart hook 模式:只查额度,输出 additionalContext JSON,注入会话上下文
+  if (asHook) {
+    const parts = [];
+    for (const l of quota.limits || []) {
+      const p = Number(l.percentage) || 0;
+      const name = l.type === 'TIME_LIMIT' ? 'MCP'
+        : periodText(l.unit, l.number).includes('小时') ? '5小时池' : '每周';
+      const reset = l.nextResetTime > 0 ? `,${countdown(l.nextResetTime - Date.now())}重置` : '';
+      parts.push(`${name} ${p.toFixed(0)}%${reset}`);
+    }
+    const line = `【GLM Coding Plan 用量】${parts.join(' · ')}(如需详情运行 node ~/.zcode/scripts/glm-usage.mjs)`;
+    console.log(JSON.stringify({
+      hookSpecificOutput: { hookEventName: 'SessionStart', additionalContext: line },
+    }));
+    return;
+  }
 
   // 近 24 小时用量(失败不影响额度展示)
   const now = new Date();

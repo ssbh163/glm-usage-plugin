@@ -38,6 +38,13 @@ node "$(ls -d "$HOME/.zcode/cli/plugins/cache"/*/glm-usage/*/skills/glm-usage/sc
 
 脚本可独立使用(不需要装插件),支持 `--json`、`--key`、`--base`、`--install` 参数,详见脚本头部注释。
 
+## 常驻显示(不用每次对话调用)
+
+1. **桌面悬浮窗(Windows)**:运行 `scripts/glm-usage-widget.ps1`(`powershell -ExecutionPolicy Bypass -File ...`)。
+   置顶小窗显示全部额度,每 5 分钟自动刷新,可拖动;右键菜单可"立即刷新 / 开机自启 / 退出"。零依赖(系统自带 PowerShell)。
+2. **会话自动注入**:脚本带 `--hook` 模式,输出 SessionStart hook 的 `additionalContext` JSON,
+   在 `~/.zcode/cli/config.json` 配置 hooks 后,每个新会话自动带上一行额度摘要。
+
 ## 前提条件
 
 - Node.js >= 18
