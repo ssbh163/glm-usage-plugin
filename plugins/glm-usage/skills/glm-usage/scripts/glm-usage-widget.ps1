@@ -4,6 +4,10 @@ $ErrorActionPreference = 'SilentlyContinue'
 [Console]::OutputEncoding = [Text.Encoding]::UTF8
 Add-Type -AssemblyName PresentationFramework, PresentationCore, WindowsBase
 
+# 单实例保护:已有悬浮窗在运行时,再次启动直接退出(桌面图标双击多次不会叠出多个窗)
+$mutex = New-Object System.Threading.Mutex($false, 'Global\GLM-Usage-Widget')
+if (-not $mutex.WaitOne(0)) { exit }
+
 $scriptPath = Join-Path $env:USERPROFILE '.zcode\scripts\glm-usage.mjs'
 # 若未 --install 过,退回到插件缓存中的脚本(取最高版本)
 if (-not (Test-Path $scriptPath)) {
@@ -28,8 +32,8 @@ $xamlText = @'
     </ContextMenu>
   </Window.ContextMenu>
   <Grid>
-    <TextBlock x:Name="CloseBtn" Text="✕" FontSize="10" Foreground="#6B7280"
-               HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,6,6,0"
+    <TextBlock x:Name="CloseBtn" Text="✕" FontSize="14" FontWeight="Bold" Foreground="#B7C0CD"
+               HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,8,10,0"
                Cursor="Hand" ToolTip="关闭悬浮窗(右键菜单有更多选项)"/>
     <StackPanel Margin="14,10,24,10">
       <TextBlock x:Name="Title" Foreground="#9AA4B2" FontSize="11" Margin="0,0,0,7"/>
@@ -50,10 +54,27 @@ $RowMcp  = $win.FindName('RowMcp')
 $Row24   = $win.FindName('Row24')
 $CloseBtn = $win.FindName('CloseBtn')
 
-# 初始位置:主屏工作区右上角
+# 初始位置:默认主屏右上角;若有保存的位置且仍在当前屏幕范围内则恢复
+$posFile = Join-Path $env:USERPROFILE '.zcode\scripts\glm-usage-widget.pos.json'
 $wa = [System.Windows.SystemParameters]::WorkArea
 $win.Left = $wa.Right - $win.Width - 16
 $win.Top  = $wa.Top + 16
+if (Test-Path $posFile) {
+  try {
+    $pos = Get-Content $posFile -Raw | ConvertFrom-Json
+    if ($pos.Left -is [double] -and $pos.Top -is [double] -and
+        $pos.Left -ge ($wa.Left - 20) -and ($pos.Left + $win.Width) -le ($wa.Right + 20) -and
+        $pos.Top -ge ($wa.Top - 20) -and ($pos.Top + $win.Height) -le ($wa.Bottom + 20)) {
+      $win.Left = $pos.Left
+      $win.Top = $pos.Top
+    }
+  } catch { }
+}
+function Save-Pos {
+  try {
+    @{ Left = $win.Left; Top = $win.Top } | ConvertTo-Json | Set-Content -Path $posFile -Encoding ASCII
+  } catch { }
+}
 
 $bc = New-Object System.Windows.Media.BrushConverter
 function Brush($hex) { $script:bc.ConvertFromString($hex) }
@@ -138,12 +159,13 @@ $timer.Interval = [TimeSpan]::FromMinutes($refreshMinutes)
 $timer.Add_Tick({ Invoke-Refresh })
 
 $win.Add_MouseLeftButtonDown({
-  if ($_.OriginalSource -ne $CloseBtn) { $win.DragMove() }
+  if ($_.OriginalSource -ne $CloseBtn) { $win.DragMove(); Save-Pos }
 })
+$win.Add_Closing({ Save-Pos })
 
 # 左上角 ✕ 关闭按钮:悬停变红,点击退出
 $CloseBtn.Add_MouseEnter({ $CloseBtn.Foreground = Brush '#F14C4C' })
-$CloseBtn.Add_MouseLeave({ $CloseBtn.Foreground = Brush '#6B7280' })
+$CloseBtn.Add_MouseLeave({ $CloseBtn.Foreground = Brush '#B7C0CD' })
 $CloseBtn.Add_MouseLeftButtonUp({ $timer.Stop(); $win.Close(); [Environment]::Exit(0) })
 
 # ContextMenu 内的元素在独立名称域,不能通过 Window.FindName 找,按 Header 索引

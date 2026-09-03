@@ -116,15 +116,25 @@ if (!cred) {
 const origin = new URL(cred.base).origin;
 
 // ---------- 请求 ----------
+// 常规查询 10s、hook 模式 5s,防止网络悬挂时阻塞悬浮窗 UI 或会话启动
+const FETCH_TIMEOUT = asHook ? 5000 : 10000;
 let bearerTried = false;
 async function get(p) {
-  const res = await fetch(origin + p, {
-    headers: {
-      Authorization: cred.token,
-      'Accept-Language': 'zh-CN,zh',
-      'Content-Type': 'application/json',
-    },
-  });
+  let res;
+  try {
+    res = await fetch(origin + p, {
+      headers: {
+        Authorization: cred.token,
+        'Accept-Language': 'zh-CN,zh',
+        'Content-Type': 'application/json',
+      },
+      signal: AbortSignal.timeout(FETCH_TIMEOUT),
+    });
+  } catch (e) {
+    throw new Error(e.name === 'TimeoutError' || e.name === 'AbortError'
+      ? `请求超时(${FETCH_TIMEOUT / 1000}s):${origin} 无响应,请检查网络`
+      : `网络错误,无法连接 ${origin}:${e.message}`);
+  }
   if (res.status === 401 && !bearerTried && !cred.token.startsWith('Bearer ')) {
     bearerTried = true;
     cred.token = `Bearer ${cred.token}`;
@@ -306,7 +316,8 @@ async function main() {
 main().catch((e) => {
   console.error('查询失败:', e.message);
   if (String(e.message).includes('HTTP 401')) {
-    console.error('API Key 可能无效或已过期,请在 ZCode 设置或智谱开放平台检查。');
+    console.error('该 API Key 可能:1) 已失效或被更换;2) 不是 Coding Plan 专用 Key(普通按量付费 Key 无法查询套餐额度)。');
+    console.error('请在 ZCode 的模型设置中检查 Key,或到智谱开放平台「个人编程套餐」重新获取。');
   }
   process.exit(1);
 });
