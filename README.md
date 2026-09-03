@@ -59,13 +59,13 @@
 
 ### 方式 C · 只用脚本,不装插件
 
-下载 [glm-usage.mjs](plugins/glm-usage/skills/glm-usage/scripts/glm-usage.mjs) 单文件,运行:
+下载 [glm-usage.mjs](plugins/glm-usage/skills/glm-usage/scripts/glm-usage.mjs)(悬浮窗需连同 [glm-usage-widget.ps1](plugins/glm-usage/skills/glm-usage/scripts/glm-usage-widget.ps1) 一起下载,建议直接下载整个 zip),运行:
 
 ```bash
 node glm-usage.mjs --install
 ```
 
-会自动把脚本装到 `~/.zcode/scripts/`、把 `/usage` 命令装到 `~/.zcode/commands/`。功能与插件基本相同(少一个 `/glm-usage:usage` 命令名)。
+一条命令装完全部:查询脚本、`/usage` 命令、桌面悬浮窗(**装完立即弹出**)、桌面图标、开机自启。
 
 ## 使用
 
@@ -93,13 +93,12 @@ node "$(ls -d "$HOME/.zcode/cli/plugins/cache"/*/glm-usage/*/skills/glm-usage/sc
 
 ### 3. 桌面悬浮窗(Windows,常驻显示)
 
-置顶小窗常驻桌面,每 5 分钟自动刷新,可拖动,右键菜单支持"立即刷新 / 开机自启 / 退出":
+置顶小窗常驻桌面,每 10 分钟自动刷新,可拖动(记住位置),开机自启:
 
-```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File "$env:USERPROFILE\.zcode\scripts\glm-usage-widget.ps1"
-```
-
-(纯插件用户把路径换成插件目录里的 `scripts/glm-usage-widget.ps1` 即可;脚本找不到 `~/.zcode/scripts/glm-usage.mjs` 时会自动定位插件缓存中的副本。)
+- **隐藏/唤回**:全局快捷键 **Ctrl+Alt+U** 随时切换;双击桌面「GLM 用量悬浮窗」图标一定唤回到前台
+- **右上角 ✕**:只是隐藏(进程驻留,数据继续刷新);**右键菜单 → 退出**才是彻底关闭
+- **API Key 失效**:标题栏明确提示,修复后自动恢复;重复启动自动去重
+- 安装方式:下载 zip 后运行 `node glm-usage.mjs --install`,**装完悬浮窗立即自动弹出**并配好桌面图标和开机自启;也可直接运行 `scripts/glm-usage-widget.ps1`
 
 ### 4. 新会话自动注入(可选进阶)
 

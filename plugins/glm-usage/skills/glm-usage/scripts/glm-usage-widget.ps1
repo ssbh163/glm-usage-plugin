@@ -3,10 +3,21 @@
 $ErrorActionPreference = 'SilentlyContinue'
 [Console]::OutputEncoding = [Text.Encoding]::UTF8
 Add-Type -AssemblyName PresentationFramework, PresentationCore, WindowsBase
+Add-Type -Namespace GLMNative -Name Hotkey -MemberDefinition @'
+[DllImport("user32.dll")] public static extern bool RegisterHotKey(IntPtr hWnd, int id, uint fsModifiers, uint vk);
+[DllImport("user32.dll")] public static extern bool UnregisterHotKey(IntPtr hWnd, int id);
+'@
 
-# 单实例保护:已有悬浮窗在运行时,再次启动直接退出(桌面图标双击多次不会叠出多个窗)
+# 单实例保护:已有实例时,先让已运行的窗口显示出来,再退出本进程
 $mutex = New-Object System.Threading.Mutex($false, 'Global\GLM-Usage-Widget')
-if (-not $mutex.WaitOne(0)) { exit }
+$ownsMutex = $false
+try { $ownsMutex = $mutex.WaitOne(0) } catch { $ownsMutex = $true }  # 前实例残留(AbandonedMutex),接管
+if (-not $ownsMutex) {
+  try {
+    [System.Threading.EventWaitHandle]::OpenExisting('Global\GLM-Usage-Widget-Show').Set() | Out-Null
+  } catch { }
+  exit
+}
 
 $scriptPath = Join-Path $env:USERPROFILE '.zcode\scripts\glm-usage.mjs'
 # 若未 --install 过,退回到插件缓存中的脚本(取最高版本)
@@ -21,7 +32,7 @@ $xamlText = @'
 <Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="GLM Usage" Topmost="True" WindowStyle="None" AllowsTransparency="True"
-        Background="#E6141418" ShowInTaskbar="False" ResizeMode="NoResize"
+        Background="#E6141418" ShowInTaskbar="False" ResizeMode="NoResize" ShowActivated="False"
         Width="342" Height="208" Opacity="0.96">
   <Window.ContextMenu>
     <ContextMenu>
@@ -34,7 +45,7 @@ $xamlText = @'
   <Grid>
     <TextBlock x:Name="CloseBtn" Text="✕" FontSize="14" FontWeight="Bold" Foreground="#B7C0CD"
                HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,8,10,0"
-               Cursor="Hand" ToolTip="关闭悬浮窗(右键菜单有更多选项)"/>
+               Cursor="Hand" ToolTip="隐藏悬浮窗(Ctrl+Alt+U 或双击桌面图标可唤回;右键菜单可彻底退出)"/>
     <StackPanel Margin="14,10,24,10">
       <TextBlock x:Name="Title" Foreground="#9AA4B2" FontSize="11" Margin="0,0,0,7"/>
       <TextBlock x:Name="Row5h"   FontSize="13" Margin="0,2" FontFamily="Cascadia Mono,Consolas,Microsoft YaHei UI"/>
@@ -163,10 +174,10 @@ $win.Add_MouseLeftButtonDown({
 })
 $win.Add_Closing({ Save-Pos })
 
-# 左上角 ✕ 关闭按钮:悬停变红,点击退出
+# 左上角 ✕ 关闭按钮:悬停变红,点击隐藏(进程驻留,Ctrl+Alt+U 唤回)
 $CloseBtn.Add_MouseEnter({ $CloseBtn.Foreground = Brush '#F14C4C' })
 $CloseBtn.Add_MouseLeave({ $CloseBtn.Foreground = Brush '#B7C0CD' })
-$CloseBtn.Add_MouseLeftButtonUp({ $timer.Stop(); $win.Close(); [Environment]::Exit(0) })
+$CloseBtn.Add_MouseLeftButtonUp({ $win.Hide() })
 
 # ContextMenu 内的元素在独立名称域,不能通过 Window.FindName 找,按 Header 索引
 $menuItems = @{}
@@ -174,7 +185,10 @@ foreach ($mi in $win.ContextMenu.Items) {
   if ($mi -is [System.Windows.Controls.MenuItem]) { $menuItems[$mi.Header] = $mi }
 }
 $menuItems['立即刷新'].Add_Click({ Invoke-Refresh })
-$menuItems['退出'].Add_Click({ $timer.Stop(); $win.Close(); [Environment]::Exit(0) })
+$menuItems['退出'].Add_Click({
+  try { if ($script:helper) { [GLMNative.Hotkey]::UnregisterHotKey($script:helper.Handle, 0xB001) | Out-Null } } catch { }
+  $timer.Stop(); $win.Close(); [Environment]::Exit(0)
+})
 $menuItems['开机自启(点击切换)'].Add_Click({
   $vbs = Join-Path ([Environment]::GetFolderPath('Startup')) 'glm-usage-widget.vbs'
   if (Test-Path $vbs) {
@@ -187,6 +201,37 @@ $menuItems['开机自启(点击切换)'].Add_Click({
   }
 })
 
+# 全局快捷键 Ctrl+Alt+U:显示/隐藏悬浮窗(隐藏时进程驻留,数据继续刷新)
+$script:helper = $null
+$win.Add_SourceInitialized({
+  $script:helper = New-Object System.Windows.Interop.WindowInteropHelper($win)
+  [void][GLMNative.Hotkey]::RegisterHotKey($script:helper.Handle, 0xB001, 0x3, 0x55)
+  $src = [System.Windows.Interop.HwndSource]::FromHwnd($script:helper.Handle)
+  $src.AddHook({
+    param($hwnd, $msg, $wParam, $lParam, [ref]$handled)
+    if ($msg -eq 0x0312 -and $wParam.ToInt64() -eq 0xB001) {
+      if ($win.IsVisible) { $win.Hide() } else { $win.Show() }
+      $handled.Value = $true
+    }
+    [IntPtr]::Zero
+  })
+})
+
+# 已有实例被再次"启动"时(如双击桌面图标),通过命名事件把窗口调到前台。
+# 注意:不能用 ThreadPool 回调(无 runspace 的线程上运行 scriptblock 会崩进程),
+# 这里用 UI 线程上的高频 DispatcherTimer 轮询事件。
+$showEvt = New-Object System.Threading.EventWaitHandle($false, [System.Threading.EventResetMode]::AutoReset, 'Global\GLM-Usage-Widget-Show')
+$wakeTimer = New-Object System.Windows.Threading.DispatcherTimer
+$wakeTimer.Interval = [TimeSpan]::FromMilliseconds(250)
+$wakeTimer.Add_Tick({
+  if ($showEvt.WaitOne(0)) {
+    if (-not $win.IsVisible) { $win.Show() } else { $win.Activate() }
+  }
+})
+$wakeTimer.Start()
+
 Invoke-Refresh
 $timer.Start()
-[void]$win.ShowDialog()
+# 非模态显示 + 手动跑消息循环:Hide() 不会结束进程,可被热键/事件再次唤起
+$win.Show()
+[System.Windows.Threading.Dispatcher]::Run()
