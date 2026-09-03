@@ -137,6 +137,36 @@ async function get(p) {
   return body.data ?? body;
 }
 
+// ---------- 颜色与排版 ----------
+// 仅在真终端且明确支持 ANSI 时着色(Git Bash 有 TERM,Windows Terminal 有 WT_SESSION);
+// 管道/重定向/老式 cmd 下自动输出纯文本,避免乱码。NO_COLOR 可强制关闭。
+const supportsAnsi = process.platform !== 'win32'
+  || !!process.env.TERM
+  || !!process.env.WT_SESSION
+  || process.env.ConEmuANSI === 'ON';
+const useColor = !process.env.NO_COLOR && process.stdout.isTTY && supportsAnsi;
+const c = (code, s) => (useColor ? `\x1b[${code}m${s}\x1b[0m` : s);
+const bold = (s) => c('1', s);
+const dim = (s) => c('2', s);
+// 用量越高越醒目:<50% 绿,50-80% 黄,>=80% 红加粗
+const rateStyle = (p) => (p >= 80 ? '1;31' : p >= 50 ? '33' : '32');
+
+// 显示宽度:中日韩全角/emoji 按 2 列计,用于对齐
+function dw(s) {
+  let w = 0;
+  for (const ch of s) {
+    const cp = ch.codePointAt(0);
+    const wide = (cp >= 0x1100 && cp <= 0x115f) || (cp >= 0x2e80 && cp <= 0xa4cf)
+      || (cp >= 0xac00 && cp <= 0xd7a3) || (cp >= 0xf900 && cp <= 0xfaff)
+      || (cp >= 0xfe30 && cp <= 0xfe6f) || (cp >= 0xff00 && cp <= 0xff60)
+      || (cp >= 0xffe0 && cp <= 0xffe6) || (cp >= 0x1f300 && cp <= 0x1faff)
+      || (cp >= 0x20000 && cp <= 0x3fffd);
+    w += wide ? 2 : 1;
+  }
+  return w;
+}
+const padEndW = (s, width) => s + ' '.repeat(Math.max(0, width - dw(s)));
+
 // ---------- 展示辅助 ----------
 const UNIT_NAME = { 3: '小时', 5: '个月', 6: '周' }; // 接口实测:unit 3/5/6 对应时/月/周
 const periodText = (u, n) => (UNIT_NAME[u] ? `${n}${UNIT_NAME[u]}` : `${n}×unit${u}`);
@@ -147,31 +177,42 @@ function countdown(ms) {
   if (!ms || ms <= 0) return '';
   const min = Math.round(ms / 60000);
   const d = Math.floor(min / 1440), h = Math.floor((min % 1440) / 60), m = min % 60;
-  return (d ? `${d}天` : '') + (h ? `${h}小时` : '') + `${m}分后重置`;
+  const parts = [];
+  if (d) parts.push(`${d} 天`);
+  if (h) parts.push(`${h} 小时`);
+  if (m || (!d && !h)) parts.push(`${m} 分钟`);
+  return parts.join(' ') + '后';
 }
 const fmtNum = (n) => Number(n || 0).toLocaleString('zh-CN');
-function bar(pct) {
-  const p = Math.max(0, Math.min(100, Number(pct) || 0));
-  return '█'.repeat(Math.round(p / 5)).padEnd(20, '░') + ` ${p.toFixed(1)}%`;
-}
 const fmtTokens = (n) => {
   const v = Number(n || 0);
-  return v >= 1e8 ? (v / 1e8).toFixed(2) + '亿'
-    : v >= 1e4 ? (v / 1e4).toFixed(1) + '万'
+  return v >= 1e8 ? (v / 1e8).toFixed(2) + ' 亿'
+    : v >= 1e4 ? (v / 1e4).toFixed(1) + ' 万'
     : fmtNum(v);
 };
-
-// ---------- 主流程 ----------
-const pad = (s) => '  ' + s;
+function bar(pct, width = 18) {
+  const p = Math.max(0, Math.min(100, Number(pct) || 0));
+  const filled = Math.round((p / 100) * width);
+  const style = rateStyle(p);
+  return c(style, '▰'.repeat(filled) + '▱'.repeat(width - filled)) + '  ' + c(style, `${p.toFixed(1)}%`);
+}
 
 function labelFor(limit) {
   const period = periodText(limit.unit, limit.number);
   if (limit.type === 'TIME_LIMIT') return `MCP 工具调用(${period})`;
-  if (period.includes('小时')) return `5 小时 Prompt 池`;
-  if (period.includes('周')) return `每周额度`;
+  if (period.includes('小时')) return '5 小时 Prompt 池';
+  if (period.includes('周')) return '每周额度';
   return `Prompt 额度(${period})`;
 }
+const iconFor = (limit) => {
+  if (limit.type === 'TIME_LIMIT') return '🔧';
+  return periodText(limit.unit, limit.number).includes('小时') ? '🕐' : '📅';
+};
 
+const LABEL_W = 22; // 标签列显示宽度,保证进度条对齐
+const rule = (ch) => c('2;36', ch.repeat(50));
+
+// ---------- 主流程 ----------
 async function main() {
   const quota = await get('/api/monitor/usage/quota/limit');
 
@@ -191,49 +232,57 @@ async function main() {
     return;
   }
 
-  const limits = quota.limits || [];
-  console.log(`GLM Coding Plan 用量  |  套餐等级: ${(quota.level || 'unknown').toUpperCase()}  |  ${origin}`);
-  console.log(`数据时间: ${now.toLocaleString('zh-CN')}  (凭据来源: ${cred.from})`);
-  console.log('');
+  const host = new URL(origin).host;
+  const level = (quota.level || 'unknown').toUpperCase();
+  console.log(rule('━'));
+  console.log(bold(' ⚡ GLM Coding Plan 用量'));
+  console.log(dim(`    ${level} 套餐 · ${host} · ${now.toLocaleString('zh-CN')}`));
+  console.log(rule('━'));
 
-  console.log('== 额度 ==');
-  for (const l of limits) {
-    console.log(pad(`${labelFor(l)}  ${bar(l.percentage)}`));
-    const reset = l.nextResetTime > 0 ? `${fmtTs(l.nextResetTime)}(${countdown(l.nextResetTime - now.getTime())})` : '—';
+  for (const l of quota.limits || []) {
+    const p = Number(l.percentage) || 0;
+    console.log('');
+    console.log(` ${iconFor(l)}  ${bold(padEndW(labelFor(l), LABEL_W))}${bar(p)}`);
     if (l.type === 'TIME_LIMIT') {
-      console.log(pad(`已用 ${fmtNum(l.currentValue)} / ${fmtNum(l.usage)} 次,剩余 ${fmtNum(l.remaining)},重置: ${reset}`));
-      const details = l.usageDetails || [];
-      if (details.length) {
-        console.log(pad('明细: ' + details.map((d) => `${d.modelCode} ${fmtNum(d.usage)}`).join('、')));
-      }
+      console.log(dim(`      已用 ${fmtNum(l.currentValue)} / ${fmtNum(l.usage)} 次 · 剩余 ${fmtNum(l.remaining)}`));
     } else {
-      console.log(pad(`重置: ${reset}`));
+      console.log(dim(`      剩余 ${(100 - p).toFixed(1)}%`));
+    }
+    if (l.nextResetTime > 0) {
+      console.log(dim(`      ↻ ${fmtTs(l.nextResetTime)} 重置(${countdown(l.nextResetTime - now.getTime())})`));
+    }
+    const details = l.usageDetails || [];
+    if (details.length) {
+      console.log(dim(`      ${details.map((d) => `${d.modelCode} ${fmtNum(d.usage)}`).join(' · ')}`));
     }
   }
 
   if (modelUsage?.totalUsage) {
     const t = modelUsage.totalUsage;
     console.log('');
-    console.log('== 近 24 小时模型用量 ==');
-    console.log(pad(`调用 ${fmtNum(t.totalModelCallCount)} 次,消耗 ${fmtTokens(t.totalTokensUsage)} tokens`));
+    console.log(` 📊  ${bold(padEndW('近 24 小时模型用量', LABEL_W))}`
+      + `${fmtNum(t.totalModelCallCount)} 次 · ${fmtTokens(t.totalTokensUsage)} tokens`);
     const models = t.modelSummaryList || [];
     if (models.length) {
-      console.log(pad('按模型: ' + models.map((m) => `${m.modelName} ${fmtTokens(m.totalTokens)}`).join('、')));
+      console.log(dim(`      ${models.map((m) => `${m.modelName} ${fmtTokens(m.totalTokens)}`).join(' · ')}`));
     }
   }
 
   if (toolUsage?.totalUsage) {
     const t = toolUsage.totalUsage;
     const parts = [];
-    if (t.totalSearchMcpCount) parts.push(`联网搜索 ${fmtNum(t.totalSearchMcpCount)} 次`);
-    if (t.totalWebReadMcpCount) parts.push(`网页读取 ${fmtNum(t.totalWebReadMcpCount)} 次`);
-    if (t.totalZreadMcpCount) parts.push(`Zread ${fmtNum(t.totalZreadMcpCount)} 次`);
+    if (t.totalSearchMcpCount) parts.push(`联网搜索 ${fmtNum(t.totalSearchMcpCount)}`);
+    if (t.totalWebReadMcpCount) parts.push(`网页读取 ${fmtNum(t.totalWebReadMcpCount)}`);
+    if (t.totalZreadMcpCount) parts.push(`Zread ${fmtNum(t.totalZreadMcpCount)}`);
     if (parts.length) {
       console.log('');
-      console.log('== 近 24 小时 MCP 调用 ==');
-      console.log(pad(parts.join(', ')));
+      console.log(` 🔌  ${bold(padEndW('近 24 小时 MCP 调用', LABEL_W))}${parts.join(' · ')}`);
     }
   }
+
+  console.log('');
+  console.log(rule('━'));
+  console.log(dim(`    凭据来源 ${cred.from} · 加 --json 看原始数据`));
 }
 
 main().catch((e) => {
