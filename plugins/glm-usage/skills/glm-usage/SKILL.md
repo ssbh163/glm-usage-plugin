@@ -1,0 +1,28 @@
+---
+name: glm-usage
+description: 查询智谱 GLM Coding Plan 的用量与额度(5 小时 Prompt 池、每周额度、MCP 月度额度、近 24 小时模型用量)。当用户询问 Coding Plan 用量、剩余额度、何时重置等问题时使用,API Key 登录 ZCode 的用户同样可用。
+allowed-tools: Bash, Read
+---
+
+# GLM Coding Plan 用量查询
+
+执行本技能自带脚本(相对本技能的 base directory,即文末注入的路径):
+
+```bash
+node scripts/glm-usage.mjs
+```
+
+若工作目录不在技能目录,使用绝对路径运行 `<base-directory>/scripts/glm-usage.mjs`;Windows Git Bash 下也可用 glob 定位:
+
+```bash
+node "$(ls -d "$HOME/.zcode/cli/plugins/cache"/*/glm-usage/*/skills/glm-usage/scripts/glm-usage.mjs 2>/dev/null | sort -V | tail -1)"
+```
+
+脚本零依赖(Node >= 18),自动按顺序读取凭据:`--key/--base` 参数 → `ANTHROPIC_AUTH_TOKEN`/`ANTHROPIC_BASE_URL` 环境变量 → ZCode 配置 `~/.zcode/v2/config.json` 中已启用的 coding-plan provider。**不要把 API Key 写进命令或文件**。
+
+## 关键约束
+
+- **只执行一次查询**,无论成功失败,立即返回结果,不要重试
+- 成功:整理成中文表格汇报(5 小时池、每周额度、MCP 月度额度、近 24 小时用量),数字以脚本输出为准
+- 失败:原样展示错误;HTTP 401 时提示用户检查 `~/.zcode/v2/config.json` 中的 API Key 或前往智谱开放平台「个人编程套餐 > 用量统计」
+- 需要原始 JSON 时,运行同一命令并加 `--json` 参数
