@@ -89,7 +89,7 @@ $xamlText = @'
       <StackPanel x:Name="Row1">
         <Grid Height="16">
           <TextBlock x:Name="R1Label" Text="" FontSize="12.5" FontWeight="SemiBold" Foreground="#FFFFFF"/>
-          <TextBlock x:Name="R1Value" Text="" FontSize="12" FontWeight="Bold" HorizontalAlignment="Right" Foreground="#99FFFFFF"/>
+          <TextBlock x:Name="R1Value" Text="" FontSize="12" FontWeight="Bold" HorizontalAlignment="Right" Foreground="#8CFFFFFF"/>
         </Grid>
         <Border Height="6" CornerRadius="3" Background="#24FFFFFF" Margin="0,4,0,4" ClipToBounds="True">
           <Border x:Name="R1Fill" Height="6" CornerRadius="3" HorizontalAlignment="Left" Width="0" Background="#33B873"/>
@@ -99,7 +99,7 @@ $xamlText = @'
       <StackPanel x:Name="Row2" Margin="0,8,0,0">
         <Grid Height="16">
           <TextBlock x:Name="R2Label" Text="" FontSize="12.5" FontWeight="SemiBold" Foreground="#FFFFFF"/>
-          <TextBlock x:Name="R2Value" Text="" FontSize="12" FontWeight="Bold" HorizontalAlignment="Right" Foreground="#99FFFFFF"/>
+          <TextBlock x:Name="R2Value" Text="" FontSize="12" FontWeight="Bold" HorizontalAlignment="Right" Foreground="#8CFFFFFF"/>
         </Grid>
         <Border Height="6" CornerRadius="3" Background="#24FFFFFF" Margin="0,4,0,4" ClipToBounds="True">
           <Border x:Name="R2Fill" Height="6" CornerRadius="3" HorizontalAlignment="Left" Width="0" Background="#33B873"/>
@@ -109,7 +109,7 @@ $xamlText = @'
       <StackPanel x:Name="Row3" Margin="0,8,0,0">
         <Grid Height="16">
           <TextBlock x:Name="R3Label" Text="" FontSize="12.5" FontWeight="SemiBold" Foreground="#FFFFFF"/>
-          <TextBlock x:Name="R3Value" Text="" FontSize="12" FontWeight="Bold" HorizontalAlignment="Right" Foreground="#99FFFFFF"/>
+          <TextBlock x:Name="R3Value" Text="" FontSize="12" FontWeight="Bold" HorizontalAlignment="Right" Foreground="#8CFFFFFF"/>
         </Grid>
         <Border Height="6" CornerRadius="3" Background="#24FFFFFF" Margin="0,4,0,4" ClipToBounds="True">
           <Border x:Name="R3Fill" Height="6" CornerRadius="3" HorizontalAlignment="Left" Width="0" Background="#33B873"/>
