@@ -65,7 +65,7 @@
 node glm-usage.mjs --install
 ```
 
-一条命令装完全部:查询脚本、`/usage` 命令、桌面悬浮窗(**装完立即弹出**)、桌面图标、开机自启。
+一条命令装完全部:查询脚本、`/usage` 命令、桌面悬浮窗(**装完立即弹出**)、登录自启。卸载同样一条命令:`node glm-usage.mjs --uninstall`。
 
 ## 使用
 
@@ -91,42 +91,20 @@ node ~/.zcode/scripts/glm-usage.mjs --json     # 原始 JSON
 node "$(ls -d "$HOME/.zcode/cli/plugins/cache"/*/glm-usage/*/skills/glm-usage/scripts/glm-usage.mjs | sort -V | tail -1)"
 ```
 
-### 3. 桌面悬浮窗(Windows,常驻显示)
+### 3. 桌面悬浮窗(Windows,随插件启停)
 
-置顶小窗常驻桌面,每 10 分钟自动刷新,可拖动(记住位置),开机自启。两种唤起方式:
+**生命周期与插件完全绑定**:安装插件后,悬浮窗由插件自带的 SessionStart hook 自动拉起,无需任何手动配置;**卸载插件后悬浮窗在数秒内自动退出**,不残留任何开机自启或后台进程。
 
-- **全局快捷键 Ctrl+G**:任何时候显示/隐藏切换(ZCode 无此快捷键,不冲突)
-- **启动 ZCode 时自动唤起**:检测到新的 ZCode 进程即调到前台;ZCode 在后台运行时仅打开窗口不算启动,不会误触发
+- **Ctrl+G** 全局快捷键:随时显示/隐藏(ZCode 无此快捷键,不冲突;热键可在脚本顶部变量中修改)
+- **启动 ZCode 时自动唤起**:检测到 ZCode 从未运行变为运行即调到前台
+- 每 10 分钟自动刷新;右上角 **✕** 只是隐藏(进程驻留),**右键菜单 → 退出**彻底关闭
+- API Key 失效时标题栏明确提示,修复后自动恢复;重复启动自动去重
 
-其他行为:右上角 **✕** 只是隐藏(进程驻留,数据继续刷新),**右键菜单 → 退出**才彻底关闭;API Key 失效时标题栏明确提示,修复后自动恢复;重复启动自动去重。安装方式:下载 zip 后运行 `node glm-usage.mjs --install`,**装完悬浮窗立即自动弹出**并配好开机自启;也可直接运行 `scripts/glm-usage-widget.ps1`(热键可在脚本顶部变量中修改)。
+> 不装插件只想要悬浮窗?用下方"方式 C"的 `--install` 独立安装(带 Windows 登录自启),用 `--uninstall` 一键完整卸载。
 
-### 4. 新会话自动注入(可选进阶)
+### 4. 新会话自动注入
 
-脚本带 `--hook` 模式,配合 ZCode 的 SessionStart hook,每个新对话自动带上一行额度摘要。先 `--install` 脚本,再编辑 `~/.zcode/cli/config.json`,加入:
-
-```json
-{
-  "hooks": {
-    "enabled": true,
-    "events": {
-      "SessionStart": [
-        {
-          "hooks": [
-            {
-              "type": "process",
-              "command": "node 可执行文件完整路径",
-              "args": ["C:/Users/你的用户名/.zcode/scripts/glm-usage.mjs", "--hook"],
-              "timeoutMs": 15000
-            }
-          ]
-        }
-      ]
-    }
-  }
-}
-```
-
-`command` 填 node 的绝对路径(终端 `where node` 可查,注意用正斜杠 `/`)。
+插件自带的 SessionStart hook 会在每个新对话开头注入一行额度摘要,无需任何配置。卸载插件即停止注入。
 
 ## 隐私与安全
 
@@ -156,19 +134,30 @@ glm-usage-plugin/                       ← 市场仓库根目录
 ├── marketplace.json                    ← 根目录副本(兼容不同读取位置)
 └── plugins/glm-usage/                  ← 插件本体
     ├── .zcode-plugin/plugin.json
+    ├── hooks/hooks.json                ← SessionStart:拉起悬浮窗 + 注入用量摘要
     ├── commands/usage.md               ← /glm-usage:usage 命令
     └── skills/glm-usage/
         ├── SKILL.md
         └── scripts/
-            ├── glm-usage.mjs           ← 查询脚本(零依赖)
-            └── glm-usage-widget.ps1    ← Windows 桌面悬浮窗
+            ├── glm-usage.mjs           ← 查询脚本(零依赖,支持 --install/--uninstall)
+            ├── glm-usage-widget.ps1    ← Windows 桌面悬浮窗
+            └── widget-launch.vbs       ← 悬浮窗启动器(hook 调用)
 ```
 
 ## 卸载
 
-- 插件:设置 → 插件管理 → 已安装 → glm-usage → 卸载
-- 脚本:删除 `~/.zcode/scripts/glm-usage.mjs` 和 `~/.zcode/commands/usage.md`
-- 悬浮窗开机自启:悬浮窗右键 → 再点一次"开机自启"即可取消
+**插件方式**(推荐,卸载即全清):
+
+1. ZCode 设置 → 插件管理 → 已安装 → glm-usage → 卸载
+2. 完成。悬浮窗会在数秒内检测到插件缓存被移除而自动退出,会话注入同时停止,不残留开机自启、进程或配置
+
+**独立脚本方式**(曾运行过 `--install` 的用户):
+
+```bash
+node glm-usage.mjs --uninstall
+```
+
+一键清除全部:悬浮窗进程、开机自启、`~/.zcode/scripts/` 下的脚本、`/usage` 命令、cli 配置中的 hook。
 
 ## License
 

@@ -1,5 +1,6 @@
 ﻿# GLM Coding Plan 桌面悬浮窗(Windows PowerShell 5.1+,零依赖)
-# 置顶显示,可拖动,每 5 分钟自动刷新;右键菜单:立即刷新 / 开机自启 / 退出
+# 置顶显示,可拖动,每 5 分钟自动刷新;右键菜单:立即刷新 / 退出
+# 生命周期与插件绑定:由插件 SessionStart hook 拉起,插件卸载(本脚本被删)后自动退出
 $ErrorActionPreference = 'SilentlyContinue'
 [Console]::OutputEncoding = [Text.Encoding]::UTF8
 Add-Type -AssemblyName PresentationFramework, PresentationCore, WindowsBase
@@ -8,14 +9,16 @@ Add-Type -Namespace GLMNative -Name Hotkey -MemberDefinition @'
 [DllImport("user32.dll")] public static extern bool UnregisterHotKey(IntPtr hWnd, int id);
 '@
 
-# 单实例保护:已有实例时,先让已运行的窗口显示出来,再退出本进程
+# 单实例保护:已有实例时,手动启动会唤起已有窗口;-NoShowIfExists 启动(插件 hook 每会话拉起)则静默退出
 $mutex = New-Object System.Threading.Mutex($false, 'Global\GLM-Usage-Widget')
 $ownsMutex = $false
 try { $ownsMutex = $mutex.WaitOne(0) } catch { $ownsMutex = $true }  # 前实例残留(AbandonedMutex),接管
 if (-not $ownsMutex) {
-  try {
-    [System.Threading.EventWaitHandle]::OpenExisting('Global\GLM-Usage-Widget-Show').Set() | Out-Null
-  } catch { }
+  if ($args -notcontains 'NoShowIfExists') {
+    try {
+      [System.Threading.EventWaitHandle]::OpenExisting('Global\GLM-Usage-Widget-Show').Set() | Out-Null
+    } catch { }
+  }
   exit
 }
 
@@ -26,18 +29,16 @@ if (-not (Test-Path $scriptPath)) {
     Sort-Object FullName -Descending | Select-Object -First 1
   if ($cached) { $scriptPath = $cached.FullName }
 }
-$ps1Path    = Join-Path $env:USERPROFILE '.zcode\scripts\glm-usage-widget.ps1'
 
 $xamlText = @'
 <Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="GLM Usage" Topmost="True" WindowStyle="None" AllowsTransparency="True"
         Background="#E6141418" ShowInTaskbar="False" ResizeMode="NoResize" ShowActivated="False"
-        Width="342" Height="208" Opacity="0.96">
+        Width="362" Height="222" Opacity="0.96">
   <Window.ContextMenu>
     <ContextMenu>
       <MenuItem x:Name="MenuRefresh" Header="立即刷新"/>
-      <MenuItem x:Name="MenuStartup" Header="开机自启(点击切换)"/>
       <Separator/>
       <MenuItem x:Name="MenuExit" Header="退出"/>
     </ContextMenu>
@@ -46,12 +47,12 @@ $xamlText = @'
     <TextBlock x:Name="CloseBtn" Text="✕" FontSize="14" FontWeight="Bold" Foreground="#B7C0CD"
                HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,8,10,0"
                Cursor="Hand" ToolTip="隐藏悬浮窗(Ctrl+G 或启动 ZCode 时唤回;右键菜单可彻底退出)"/>
-    <StackPanel Margin="14,10,24,10">
-      <TextBlock x:Name="Title" Foreground="#9AA4B2" FontSize="11" Margin="0,0,0,7"/>
-      <TextBlock x:Name="Row5h"   FontSize="13" Margin="0,2" FontFamily="Cascadia Mono,Consolas,Microsoft YaHei UI"/>
-      <TextBlock x:Name="RowWeek" FontSize="13" Margin="0,2" FontFamily="Cascadia Mono,Consolas,Microsoft YaHei UI"/>
-      <TextBlock x:Name="RowMcp"  FontSize="13" Margin="0,2" FontFamily="Cascadia Mono,Consolas,Microsoft YaHei UI"/>
-      <TextBlock x:Name="Row24" Foreground="#9AA4B2" FontSize="11" Margin="0,8,0,0" TextWrapping="Wrap"/>
+    <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Margin="10,8">
+      <TextBlock x:Name="Title" Foreground="#9AA4B2" FontSize="12" Margin="0,0,0,7" TextAlignment="Center"/>
+      <TextBlock x:Name="Row5h"   FontSize="14" Margin="0,2" FontFamily="Cascadia Mono,Consolas,Microsoft YaHei UI"/>
+      <TextBlock x:Name="RowWeek" FontSize="14" Margin="0,2" FontFamily="Cascadia Mono,Consolas,Microsoft YaHei UI"/>
+      <TextBlock x:Name="RowMcp"  FontSize="14" Margin="0,2" FontFamily="Cascadia Mono,Consolas,Microsoft YaHei UI"/>
+      <TextBlock x:Name="Row24" Foreground="#9AA4B2" FontSize="12" Margin="0,8,0,0" TextAlignment="Center"/>
     </StackPanel>
   </Grid>
 </Window>
@@ -110,10 +111,10 @@ function Set-Row($tb, $label, $pct, $subline) {
   $tb.Inlines.Clear()
   Add-Run $tb ('  ' + (PadW $label 10)) '#C0C8D4' $null
   Add-Run $tb "$bar  " (RateColor $p) $null
-  Add-Run $tb ("{0,5:F1}%" -f $p) (RateColor $p) $null
+  Add-Run $tb ("已用 {0:F1}%" -f $p) (RateColor $p) $null
   if ($subline) {
     $tb.Inlines.Add((New-Object System.Windows.Documents.LineBreak))
-    Add-Run $tb "      $subline" '#6B7280' 11
+    Add-Run $tb "      $subline" '#6B7280' 12
   }
 }
 function Format-Clock($ms) {
@@ -189,17 +190,6 @@ $menuItems['退出'].Add_Click({
   try { if ($script:helper) { [GLMNative.Hotkey]::UnregisterHotKey($script:helper.Handle, 0xB001) | Out-Null } } catch { }
   $timer.Stop(); $win.Close(); [Environment]::Exit(0)
 })
-$menuItems['开机自启(点击切换)'].Add_Click({
-  $vbs = Join-Path ([Environment]::GetFolderPath('Startup')) 'glm-usage-widget.vbs'
-  if (Test-Path $vbs) {
-    Remove-Item $vbs
-    [System.Windows.MessageBox]::Show('已取消开机自启', 'GLM 用量悬浮窗') | Out-Null
-  } else {
-    $cmd = 'CreateObject("WScript.Shell").Run "powershell -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File ""' + $ps1Path + '""", 0, False'
-    [IO.File]::WriteAllText($vbs, $cmd, [Text.Encoding]::ASCII)
-    [System.Windows.MessageBox]::Show('已设置开机自启(登录后自动显示)', 'GLM 用量悬浮窗') | Out-Null
-  }
-})
 
 # 全局快捷键(可改):0x2=Ctrl,0x1=Alt,0x4=Shift 可组合;G=0x47
 $hotkeyModifiers = 0x2
@@ -225,6 +215,8 @@ $script:zcodeWasRunning = [bool](Get-Process -Name 'ZCode' -ErrorAction Silently
 $zcodeTimer = New-Object System.Windows.Threading.DispatcherTimer
 $zcodeTimer.Interval = [TimeSpan]::FromMilliseconds(2000)
 $zcodeTimer.Add_Tick({
+  # 自存活检测:本脚本文件被删除(= 插件已卸载,缓存目录被移除)时,悬浮窗自行退出
+  if ($PSCommandPath -and -not (Test-Path $PSCommandPath)) { [Environment]::Exit(0) }
   $running = [bool](Get-Process -Name 'ZCode' -ErrorAction SilentlyContinue)
   if ($running -and -not $script:zcodeWasRunning) {
     if (-not $win.IsVisible) { $win.Show() }

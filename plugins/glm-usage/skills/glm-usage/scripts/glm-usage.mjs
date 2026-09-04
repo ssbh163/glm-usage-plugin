@@ -93,6 +93,45 @@ if (argv.includes('--install')) {
   process.exit(0);
 }
 
+// ---------- 反安装:清除 --install 安装的全部内容 ----------
+if (argv.includes('--uninstall')) {
+  const home = os.homedir();
+  const { exec } = await import('node:child_process');
+  const removed = [];
+  // 1. 结束悬浮窗进程
+  if (process.platform === 'win32') {
+    exec('powershell -NoProfile -Command "Get-CimInstance Win32_Process -Filter \'Name=\'\'powershell.exe\'\'\' | Where-Object { $_.CommandLine -match \'glm-usage-widget\' } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force }"',
+      () => { });
+  }
+  // 2. 删除文件
+  const targets = [
+    path.join(home, 'AppData', 'Roaming', 'Microsoft', 'Windows', 'Start Menu', 'Programs', 'Startup', 'glm-usage-widget.vbs'),
+    path.join(home, '.zcode', 'scripts', 'glm-usage.mjs'),
+    path.join(home, '.zcode', 'scripts', 'glm-usage-widget.ps1'),
+    path.join(home, '.zcode', 'scripts', 'glm-usage-widget-launch.vbs'),
+    path.join(home, '.zcode', 'scripts', 'glm-usage-widget.pos.json'),
+    path.join(home, '.zcode', 'commands', 'usage.md'),
+  ];
+  for (const t of targets) {
+    if (fs.existsSync(t)) { fs.rmSync(t); removed.push(t); }
+  }
+  // 3. 移除 cli 配置里的 SessionStart hook
+  const cliConfig = path.join(home, '.zcode', 'cli', 'config.json');
+  try {
+    const cfg = JSON.parse(fs.readFileSync(cliConfig, 'utf8'));
+    if (cfg.hooks) {
+      delete cfg.hooks;
+      fs.writeFileSync(cliConfig, JSON.stringify(cfg, null, 2) + '\n');
+      removed.push(cliConfig + ' (hooks)');
+    }
+  } catch { /* 配置读取失败则跳过 */ }
+  console.log('卸载完成。已清除:');
+  for (const r of removed) console.log('  - ' + r);
+  if (!removed.length) console.log('  (没有发现已安装的内容)');
+  console.log('插件本体请在 ZCode 设置 → 插件管理中卸载(其悬浮窗会随之自动退出)。');
+  process.exit(0);
+}
+
 // ---------- 凭据与域名 ----------
 function fromArgs() {
   const key = flagValue('--key'), base = flagValue('--base');
@@ -225,7 +264,7 @@ function bar(pct, width = 18) {
   const p = Math.max(0, Math.min(100, Number(pct) || 0));
   const filled = Math.round((p / 100) * width);
   const style = rateStyle(p);
-  return c(style, '▰'.repeat(filled) + '▱'.repeat(width - filled)) + '  ' + c(style, `${p.toFixed(1)}%`);
+  return c(style, '▰'.repeat(filled) + '▱'.repeat(width - filled)) + '  ' + c(style, `已用 ${p.toFixed(1)}%`);
 }
 
 function labelFor(limit) {

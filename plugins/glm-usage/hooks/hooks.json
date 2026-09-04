@@ -1,0 +1,27 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "process",
+            "command": "wscript.exe",
+            "args": ["${ZCODE_PLUGIN_ROOT}/skills/glm-usage/scripts/widget-launch.vbs"],
+            "timeoutMs": 10000,
+            "statusMessage": "确保 GLM 用量悬浮窗在运行"
+          }
+        ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${ZCODE_PLUGIN_ROOT}/skills/glm-usage/scripts/glm-usage.mjs\" --hook",
+            "timeoutMs": 8000,
+            "statusMessage": "注入 GLM Coding Plan 用量摘要"
+          }
+        ]
+      }
+    ]
+  }
+}
