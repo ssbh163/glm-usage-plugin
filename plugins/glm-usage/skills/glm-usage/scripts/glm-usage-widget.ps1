@@ -9,6 +9,30 @@ Add-Type -Namespace GLMNative -Name Hotkey -MemberDefinition @'
 [DllImport("user32.dll")] public static extern bool UnregisterHotKey(IntPtr hWnd, int id);
 '@
 
+# 亚克力磨砂玻璃(Windows 10/11 SetWindowCompositionAttribute)
+Add-Type -TypeDefinition @'
+using System;
+using System.Runtime.InteropServices;
+public class GLMComposition {
+  [StructLayout(LayoutKind.Sequential)]
+  public struct AccentPolicy { public int AccentState; public int AccentFlags; public uint GradientColor; public int AnimationId; }
+  [StructLayout(LayoutKind.Sequential)]
+  public struct WCAD { public int Attrib; public IntPtr Data; public int SizeOfData; }
+  [DllImport("user32.dll")]
+  public static extern int SetWindowCompositionAttribute(IntPtr hwnd, ref WCAD data);
+  // AccentState 4 = ACCENT_ENABLE_ACRYLICBLURBEHIND; gradient 为 0xAABBGGRR 浅黑色调
+  public static bool EnableAcrylic(IntPtr hwnd, uint gradient) {
+    var ap = new AccentPolicy { AccentState = 4, AccentFlags = 2, GradientColor = gradient };
+    IntPtr p = Marshal.AllocHGlobal(Marshal.SizeOf(ap));
+    Marshal.StructureToPtr(ap, p, false);
+    var d = new WCAD { Attrib = 19, Data = p, SizeOfData = Marshal.SizeOf(ap) };
+    int r = SetWindowCompositionAttribute(hwnd, ref d);
+    Marshal.FreeHGlobal(p);
+    return r != 0;
+  }
+}
+'@
+
 # 单实例保护:已有实例时,手动启动会唤起已有窗口;-NoShowIfExists 启动(插件 hook 每会话拉起)则静默退出
 $mutex = New-Object System.Threading.Mutex($false, 'Global\GLM-Usage-Widget')
 $ownsMutex = $false
@@ -43,7 +67,7 @@ $xamlText = @'
       <MenuItem x:Name="MenuExit" Header="退出"/>
     </ContextMenu>
   </Window.ContextMenu>
-  <Border CornerRadius="16" Background="#F01C1F24" BorderBrush="#1AFFFFFF" BorderThickness="1"
+  <Border x:Name="Root" CornerRadius="16" Background="#01000000" BorderBrush="#26FFFFFF" BorderThickness="1"
           Margin="10" Padding="20,14">
     <StackPanel>
       <!-- 标题栏 -->
@@ -60,43 +84,43 @@ $xamlText = @'
 
       <!-- 额度行 1 -->
       <Grid>
-        <TextBlock x:Name="R1Label" Text="🕐  5 小时 Prompt 池" FontSize="13.5" FontWeight="SemiBold" Foreground="#EEF0F4"/>
-        <TextBlock x:Name="R1Value" Text="" FontSize="13" HorizontalAlignment="Right" Foreground="#E2E6EA"/>
+        <TextBlock x:Name="R1Label" Text="🕐  5 小时 Prompt 池" FontSize="13.5" FontWeight="SemiBold" Foreground="#F2F3F5"/>
+        <TextBlock x:Name="R1Value" Text="" FontSize="13" HorizontalAlignment="Right" Foreground="#D9DDE2"/>
       </Grid>
       <Border Height="7" CornerRadius="3.5" Background="#2A2D33" Margin="0,5" ClipToBounds="True">
         <Border x:Name="R1Fill" Height="7" CornerRadius="3.5" HorizontalAlignment="Left" Width="0" Background="#33B873"/>
       </Border>
-      <TextBlock x:Name="R1Sub" Text="" FontSize="11" Foreground="#73FFFFFF"/>
+      <TextBlock x:Name="R1Sub" Text="" FontSize="11" Foreground="#80FFFFFF"/>
       <Rectangle Height="0" Margin="0,5"/>
 
       <!-- 额度行 2 -->
       <Grid>
-        <TextBlock x:Name="R2Label" Text="📅  每周额度" FontSize="13.5" FontWeight="SemiBold" Foreground="#EEF0F4"/>
-        <TextBlock x:Name="R2Value" Text="" FontSize="13" HorizontalAlignment="Right" Foreground="#E2E6EA"/>
+        <TextBlock x:Name="R2Label" Text="📅  每周额度" FontSize="13.5" FontWeight="SemiBold" Foreground="#F2F3F5"/>
+        <TextBlock x:Name="R2Value" Text="" FontSize="13" HorizontalAlignment="Right" Foreground="#D9DDE2"/>
       </Grid>
       <Border Height="7" CornerRadius="3.5" Background="#2A2D33" Margin="0,5" ClipToBounds="True">
         <Border x:Name="R2Fill" Height="7" CornerRadius="3.5" HorizontalAlignment="Left" Width="0" Background="#33B873"/>
       </Border>
-      <TextBlock x:Name="R2Sub" Text="" FontSize="11" Foreground="#73FFFFFF"/>
+      <TextBlock x:Name="R2Sub" Text="" FontSize="11" Foreground="#80FFFFFF"/>
       <Rectangle Height="0" Margin="0,5"/>
 
       <!-- 额度行 3 -->
       <Grid>
-        <TextBlock x:Name="R3Label" Text="🔧  MCP 工具调用 (1个月)" FontSize="13.5" FontWeight="SemiBold" Foreground="#EEF0F4"/>
-        <TextBlock x:Name="R3Value" Text="" FontSize="13" HorizontalAlignment="Right" Foreground="#E2E6EA"/>
+        <TextBlock x:Name="R3Label" Text="🔧  MCP 工具调用 (1个月)" FontSize="13.5" FontWeight="SemiBold" Foreground="#F2F3F5"/>
+        <TextBlock x:Name="R3Value" Text="" FontSize="13" HorizontalAlignment="Right" Foreground="#D9DDE2"/>
       </Grid>
       <Border Height="7" CornerRadius="3.5" Background="#2A2D33" Margin="0,5" ClipToBounds="True">
         <Border x:Name="R3Fill" Height="7" CornerRadius="3.5" HorizontalAlignment="Left" Width="0" Background="#33B873"/>
       </Border>
-      <TextBlock x:Name="R3Sub" Text="" FontSize="11" Foreground="#73FFFFFF"/>
+      <TextBlock x:Name="R3Sub" Text="" FontSize="11" Foreground="#80FFFFFF"/>
 
       <!-- 底部:24 小时用量 -->
       <Rectangle Height="1" Fill="#17FFFFFF" Margin="0,10,0,8"/>
       <Grid>
-        <TextBlock Text="📊  近 24 小时" FontSize="12.5" FontWeight="Medium" Foreground="#EEF0F4"/>
+        <TextBlock Text="📊  近 24 小时" FontSize="12.5" FontWeight="Medium" Foreground="#F2F3F5"/>
         <TextBlock x:Name="FValue" Text="" FontSize="12.5" FontWeight="Medium" HorizontalAlignment="Right" Foreground="#F5F6F8"/>
       </Grid>
-      <TextBlock x:Name="FSub" Text="" FontSize="11" Foreground="#73FFFFFF" Margin="0,4,0,0"/>
+      <TextBlock x:Name="FSub" Text="" FontSize="11" Foreground="#80FFFFFF" Margin="0,4,0,0"/>
       <TextBlock Text="Ctrl+G 唤出 / 收起 · 拖拽面板可移动位置" FontSize="10.5" Foreground="#4DFFFFFF" Margin="0,7,0,0"/>
     </StackPanel>
   </Border>
@@ -243,6 +267,11 @@ $script:helper = $null
 $win.Add_SourceInitialized({
   $script:helper = New-Object System.Windows.Interop.WindowInteropHelper($win)
   [void][GLMNative.Hotkey]::RegisterHotKey($script:helper.Handle, 0xB001, $script:hotkeyModifiers, $script:hotkeyKey)
+  # 磨砂玻璃:浅黑色调(60% 透明黑),失败时回退为不透明深色底
+  $Root = $win.FindName('Root')
+  if (-not [GLMComposition]::EnableAcrylic($script:helper.Handle, 0x991A1A18)) {
+    $Root.Background = [System.Windows.Media.BrushConverter]::new().ConvertFromString('#F01C1F24')
+  }
   $src = [System.Windows.Interop.HwndSource]::FromHwnd($script:helper.Handle)
   $src.AddHook({
     param($hwnd, $msg, $wParam, $lParam, [ref]$handled)
