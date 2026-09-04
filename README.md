@@ -97,7 +97,7 @@ node "$(ls -d "$HOME/.zcode/cli/plugins/cache"/*/glm-usage/*/skills/glm-usage/sc
 
 | 设备 | UI | 说明 |
 |---|---|---|
-| **Windows** | WPF 磨砂玻璃卡片(浅黑玻璃,社区原版风格) | Ctrl+G 显示/隐藏;启动 ZCode 自动唤起;ZCode 完全退出时随之退出;✕ 隐藏、右键退出 |
+| **Windows** | WPF 磨砂玻璃卡片(浅黑玻璃,社区原版风格) | Ctrl+G 显示/隐藏;启动 ZCode / 新建会话自动唤回;ZCode 完全退出时随之退出;✕ 隐藏、右键退出 |
 | **macOS** | 原生 HUD 面板(社区移植的 GLMUsageHUD) | 编译一次即可:进入插件目录 `macos/` 执行 `bash build.sh`,生成 `GLMUsageHUD.app`;之后每次会话自动在后台打开 |
 | 其他系统 | (无悬浮窗,仅命令/技能/注入) | — |
 
@@ -106,6 +106,18 @@ node "$(ls -d "$HOME/.zcode/cli/plugins/cache"/*/glm-usage/*/skills/glm-usage/sc
 - Windows 版:右上角 **✕** 只是隐藏(进程驻留),**右键菜单 → 退出**彻底关闭;重复启动自动去重;位置记忆
 - macOS 版:菜单栏有 ⚡ 兜底图标;详见 `macos/README.md`
 - API Key 失效时面板明确提示,修复后自动恢复
+
+**悬浮窗什么时候会出现?** 自动弹出只挂在有可靠信号的时机,其余交给手动:
+
+| 场景 | 行为 |
+|---|---|
+| 冷启动(会话开始时没有实例) | 自动拉起并显示 |
+| 新建会话(实例已在运行) | 自动唤回显示 |
+| 切换会话 | 不动作——窗口常驻最上层,本来就在屏幕上 |
+| 手动收起(✕ / Ctrl+G) | 保持收起,Ctrl+G 随时唤回;下一个新会话自动弹回 |
+| ZCode 完全退出 / 插件卸载 | 悬浮窗随之退出 |
+
+实现上:新会话唤回由 hook touch 唤醒文件(`~/.zcode/scripts/glm-usage-widget.wake`,运行中的实例 250ms 内响应)完成;手动再次运行脚本则走命名事件唤回已有窗口。单实例互斥量、命名事件与唤醒文件都在耗时初始化(Add-Type/XAML)之前就绪,不会因主实例还在启动而丢信号。
 
 > 不装插件只想要 Windows 悬浮窗?用下方"方式 C"的 `--install` 独立安装(带 Windows 登录自启),用 `--uninstall` 一键完整卸载。
 
@@ -133,6 +145,9 @@ API Key 无效或过期,去智谱开放平台重新获取。
 **Q:Windows 悬浮窗按 Ctrl+G 没反应?**
 两种情况:①悬浮窗进程没在运行(它只随 ZCode 存活,ZCode 完全退出后自退;重开 ZCode 或新开一个对话即恢复);②全局热键被其他软件占用(截图/翻译工具等)——此时悬浮窗底部会显示橙色 ⚠ 提示,可关闭占用软件或在脚本顶部修改 `$hotkeyModifiers`/`$hotkeyKey` 换键。
 
+**Q:新会话开始时悬浮窗偶尔不自动弹出?**
+本版本已修复——旧版的唤醒事件创建得太晚,主实例启动头几秒内到达的信号会被静默丢弃。若升级后仍遇到,检查 `~/.zcode/scripts/` 目录是否存在且可写;悬浮窗没在运行时,新开一个对话即会重新拉起。
+
 **Q:额度数字和网页后台对不上?**
 查询接口是智谱未公开文档的监控接口,官方若调整字段,更新脚本中的映射即可(`TOKENS_LIMIT` unit=3 是 5 小时池、unit=6 是每周,`TIME_LIMIT` 是 MCP 每月)。
 
@@ -152,7 +167,7 @@ glm-usage-plugin/                       ← 市场仓库根目录
         └── scripts/
             ├── glm-usage.mjs           ← 查询脚本(零依赖,支持 --install/--uninstall)
             ├── glm-usage-widget.ps1    ← Windows 悬浮窗(磨砂玻璃卡片)
-            ├── widget-launch.mjs       ← 跨平台启动器(按设备分发)
+            ├── widget-launch.mjs       ← 跨平台启动器(按设备分发;新会话 touch 唤醒文件唤回已有实例)
             └── widget-launch.vbs       ← Windows 启动器(vbs,免黑窗)
 ```
 
@@ -170,6 +185,11 @@ node glm-usage.mjs --uninstall
 ```
 
 一键清除全部:悬浮窗进程、开机自启、`~/.zcode/scripts/` 下的脚本、`/usage` 命令、cli 配置中的 hook。
+
+## 更新日志
+
+- **0.0.1**:悬浮窗唤回机制重做。单实例互斥量、命名事件与唤醒文件改为在 Add-Type/XAML 等耗时初始化之前建立;新会话通过唤醒文件毫秒级唤回,手动再次运行脚本走命名事件并带重试;hook 拉起的重复实例约 300ms 静默退出。修复新会话唤回不稳定(启动竞态丢信号)的问题。
+- 更早版本见提交历史。
 
 ## License
 

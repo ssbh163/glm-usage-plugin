@@ -3,6 +3,31 @@
 # 生命周期与插件绑定:由插件 SessionStart hook 拉起,插件卸载(本脚本被删)后自动退出
 $ErrorActionPreference = 'SilentlyContinue'
 [Console]::OutputEncoding = [Text.Encoding]::UTF8
+
+# 单实例保护 + 唤醒通道:必须放在 Add-Type/XAML 等耗时初始化之前,
+# 否则主实例启动头几秒内到达的唤醒信号(事件尚未创建/轮询尚未开始)会被静默丢弃
+$mutex = New-Object System.Threading.Mutex($false, 'Global\GLM-Usage-Widget')
+$ownsMutex = $false
+try { $ownsMutex = $mutex.WaitOne(0) } catch { $ownsMutex = $true }
+if (-not $ownsMutex) {
+  if ($args -notcontains 'NoShowIfExists') {
+    # 手动再次启动:唤醒已有窗口;主实例拿到互斥量后立刻创建事件,重试仅兜底
+    for ($i = 0; $i -lt 10; $i++) {
+      try {
+        [System.Threading.EventWaitHandle]::OpenExisting('Global\GLM-Usage-Widget-Show').Set() | Out-Null
+        break
+      } catch { Start-Sleep -Milliseconds 100 }
+    }
+  }
+  exit
+}
+# 主实例:立即创建唤醒事件(initialState=false,不会误触发)
+$showEvt = New-Object System.Threading.EventWaitHandle($false, [System.Threading.EventResetMode]::AutoReset, 'Global\GLM-Usage-Widget-Show')
+
+# 唤醒文件:SessionStart hook(新会话)touch 一次,运行中的实例轮询到 mtime 变化即唤回
+$wakeFile = Join-Path $env:USERPROFILE '.zcode\scripts\glm-usage-widget.wake'
+$script:lastWake = if (Test-Path $wakeFile) { (Get-Item $wakeFile).LastWriteTimeUtc } else { [datetime]::MinValue }
+
 Add-Type -AssemblyName PresentationFramework, PresentationCore, WindowsBase
 Add-Type -Namespace GLMNative -Name Hotkey -MemberDefinition @'
 [DllImport("user32.dll")] public static extern bool RegisterHotKey(IntPtr hWnd, int id, uint fsModifiers, uint vk);
@@ -30,19 +55,6 @@ public class GLMComposition {
   }
 }
 '@
-
-# 单实例保护:已有实例时,手动启动会唤起已有窗口;-NoShowIfExists 启动(插件 hook 每会话拉起)则静默退出
-$mutex = New-Object System.Threading.Mutex($false, 'Global\GLM-Usage-Widget')
-$ownsMutex = $false
-try { $ownsMutex = $mutex.WaitOne(0) } catch { $ownsMutex = $true }
-if (-not $ownsMutex) {
-  if ($args -notcontains 'NoShowIfExists') {
-    try {
-      [System.Threading.EventWaitHandle]::OpenExisting('Global\GLM-Usage-Widget-Show').Set() | Out-Null
-    } catch { }
-  }
-  exit
-}
 
 $scriptPath = Join-Path $env:USERPROFILE '.zcode\scripts\glm-usage.mjs'
 if (-not (Test-Path $scriptPath)) {
@@ -323,14 +335,18 @@ $zcodeTimer.Add_Tick({
 })
 $zcodeTimer.Start()
 
-# 再次"启动"时唤起到前台(UI 线程轮询事件)
-$showEvt = New-Object System.Threading.EventWaitHandle($false, [System.Threading.EventResetMode]::AutoReset, 'Global\GLM-Usage-Widget-Show')
+# 唤醒轮询:双通道 —— 命名事件(手动再次启动)+ 唤醒文件(SessionStart hook touch)
 $wakeTimer = New-Object System.Windows.Threading.DispatcherTimer
 $wakeTimer.Interval = [TimeSpan]::FromMilliseconds(250)
 $wakeTimer.Add_Tick({
-  if ($showEvt.WaitOne(0)) {
-    if (-not $win.IsVisible) { $win.Show() } else { $win.Activate() }
+  $wake = $showEvt.WaitOne(0)
+  $wi = Get-Item $wakeFile -ErrorAction SilentlyContinue
+  if ($wi -and $wi.LastWriteTimeUtc -gt $script:lastWake) {
+    $script:lastWake = $wi.LastWriteTimeUtc
+    $wake = $true
   }
+  # 只负责唤回;已可见时不 Activate,避免抢焦点(Topmost 本就在最上层)
+  if ($wake -and -not $win.IsVisible) { $win.Show() }
 })
 $wakeTimer.Start()
 
