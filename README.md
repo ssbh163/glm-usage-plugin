@@ -130,6 +130,9 @@ API Key 无效或过期,去智谱开放平台重新获取。
 **Q:不用 ZCode,能在 Claude Code 里用吗?**
 可以。设置 `ANTHROPIC_AUTH_TOKEN=https://open.bigmodel.cn/api/anthropic` 对应的环境变量后直接跑脚本(国际站用 `https://api.z.ai/api/anthropic`)。
 
+**Q:Windows 悬浮窗按 Ctrl+G 没反应?**
+两种情况:①悬浮窗进程没在运行(它只随 ZCode 存活,ZCode 完全退出后自退;重开 ZCode 或新开一个对话即恢复);②全局热键被其他软件占用(截图/翻译工具等)——此时悬浮窗底部会显示橙色 ⚠ 提示,可关闭占用软件或在脚本顶部修改 `$hotkeyModifiers`/`$hotkeyKey` 换键。
+
 **Q:额度数字和网页后台对不上?**
 查询接口是智谱未公开文档的监控接口,官方若调整字段,更新脚本中的映射即可(`TOKENS_LIMIT` unit=3 是 5 小时池、unit=6 是每周,`TIME_LIMIT` 是 MCP 每月)。
 

@@ -135,6 +135,7 @@ $BtnRefresh = & $el 'BtnRefresh'
 $BtnClose = & $el 'BtnClose'
 $FLabel = & $el 'FLabel'
 $FSub = & $el 'FSub'
+$Hint = & $el 'Hint'
 $rows = @()
 for ($i = 1; $i -le 3; $i++) {
   $rows += [pscustomobject]@{
@@ -274,7 +275,14 @@ $hotkeyKey = 0x47
 $script:helper = $null
 $win.Add_SourceInitialized({
   $script:helper = New-Object System.Windows.Interop.WindowInteropHelper($win)
-  [void][GLMNative.Hotkey]::RegisterHotKey($script:helper.Handle, 0xB001, $script:hotkeyModifiers, $script:hotkeyKey)
+  $hkOk = [GLMNative.Hotkey]::RegisterHotKey($script:helper.Handle, 0xB001, $script:hotkeyModifiers, $script:hotkeyKey)
+  if (-not $hkOk) {
+    # 全局热键被其他软件占用:醒目提示,避免"按了没反应"无从排查
+    $mods = (@{ 1 = 'Alt'; 2 = 'Ctrl'; 4 = 'Shift'; 8 = 'Win' }[[int]$script:hotkeyModifiers])
+    $key = [char]$script:hotkeyKey
+    $Hint.Text = "⚠ ${mods}+$key 已被其他软件占用,快捷键不可用(改键:脚本顶部 `\$hotkeyKey)"
+    $Hint.Foreground = Brush '#FFA94D'
+  }
   # 磨砂玻璃:BlurBehind + 浅黑色调;失败回退不透明深色
   $Root = $win.FindName('Root')
   if (-not [GLMComposition]::EnableBlur($script:helper.Handle, 0x991A1A18)) {
