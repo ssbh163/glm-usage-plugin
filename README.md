@@ -1,4 +1,4 @@
-# glm-usage —— 在 ZCode 中查看智谱 Coding Plan 额度
+# glm-usage — 0.0.1
 
 在 ZCode 中用智谱(Coding Plan)**API Key 登录**时,端内看不到 5 小时池和每周额度。这个插件通过智谱官方监控接口(与官方 glm-plan-usage 插件同源)把额度带回来:
 
