@@ -35,7 +35,7 @@ $xamlText = @'
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="GLM Usage" Topmost="True" WindowStyle="None" AllowsTransparency="True"
         Background="Transparent" ShowInTaskbar="False" ResizeMode="NoResize" ShowActivated="False"
-        Width="308" SizeToContent="Height">
+        Width="340" SizeToContent="Height">
   <Window.ContextMenu>
     <ContextMenu>
       <MenuItem x:Name="MenuRefresh" Header="立即刷新"/>
@@ -43,65 +43,61 @@ $xamlText = @'
       <MenuItem x:Name="MenuExit" Header="退出"/>
     </ContextMenu>
   </Window.ContextMenu>
-  <Border CornerRadius="16" Background="#F0202228" BorderBrush="#1AFFFFFF" BorderThickness="1"
-          Margin="10" Padding="18,14">
+  <Border CornerRadius="16" Background="#F01C1F24" BorderBrush="#1AFFFFFF" BorderThickness="1"
+          Margin="10" Padding="20,16">
     <StackPanel>
       <!-- 标题栏 -->
       <Grid>
-        <TextBlock Text="⚡ GLM Coding Plan" FontSize="14" FontWeight="Bold" Foreground="#F2F4F8"/>
+        <TextBlock Text="⚡ GLM Coding Plan" FontSize="16" FontWeight="Bold" Foreground="#F5F6F8"/>
         <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
-          <TextBlock x:Name="BtnRefresh" Text="↻" FontSize="14" Foreground="#99A0AA" Cursor="Hand"
-                     ToolTip="立即刷新" Margin="0,0,12,0"/>
-          <TextBlock x:Name="BtnClose" Text="✕" FontSize="14" FontWeight="Bold" Foreground="#99A0AA"
+          <TextBlock x:Name="BtnRefresh" Text="↻" FontSize="15" Foreground="#99A0AA" Cursor="Hand"
+                     ToolTip="立即刷新" Margin="0,0,16,0"/>
+          <TextBlock x:Name="BtnClose" Text="✕" FontSize="15" FontWeight="Bold" Foreground="#99A0AA"
                      Cursor="Hand" ToolTip="收起面板(Ctrl+G 唤回;右键菜单可退出)"/>
         </StackPanel>
       </Grid>
-      <TextBlock x:Name="Meta" Text="正在读取…" FontSize="10.5" Foreground="#66FFFFFF" Margin="0,5,0,10"/>
+      <TextBlock x:Name="Meta" Text="正在读取…" FontSize="11" Foreground="#66FFFFFF" Margin="0,6,0,14"/>
 
-      <!-- 三行额度 -->
-      <StackPanel>
-        <Grid>
-          <TextBlock x:Name="R1Label" Text="5 小时 Prompt 池" FontSize="12.5" FontWeight="SemiBold" Foreground="#E8EAF0"/>
-          <TextBlock x:Name="R1Value" Text="" FontSize="12" FontWeight="Medium" HorizontalAlignment="Right" Foreground="#33B873"/>
-        </Grid>
-        <Border Height="6" CornerRadius="3" Background="#24FFFFFF" Margin="0,5" ClipToBounds="True">
-          <Border x:Name="R1Fill" Height="6" CornerRadius="3" HorizontalAlignment="Left" Width="0" Background="#33B873"/>
-        </Border>
-        <TextBlock x:Name="R1Sub" Text="" FontSize="10.5" Foreground="#66FFFFFF"/>
-      </StackPanel>
-      <Rectangle Height="1" Fill="#14FFFFFF" Margin="0,8"/>
+      <!-- 额度行 1 -->
+      <Grid>
+        <TextBlock x:Name="R1Label" Text="🕐  5 小时 Prompt 池" FontSize="13.5" FontWeight="SemiBold" Foreground="#EEF0F4"/>
+        <TextBlock x:Name="R1Value" Text="" FontSize="13" HorizontalAlignment="Right" Foreground="#E2E6EA"/>
+      </Grid>
+      <Border Height="7" CornerRadius="3.5" Background="#2A2D33" Margin="0,6" ClipToBounds="True">
+        <Border x:Name="R1Fill" Height="7" CornerRadius="3.5" HorizontalAlignment="Left" Width="0" Background="#33B873"/>
+      </Border>
+      <TextBlock x:Name="R1Sub" Text="" FontSize="11" Foreground="#73FFFFFF"/>
+      <Rectangle Height="0" Margin="0,7"/>
 
-      <StackPanel>
-        <Grid>
-          <TextBlock x:Name="R2Label" Text="每周额度" FontSize="12.5" FontWeight="SemiBold" Foreground="#E8EAF0"/>
-          <TextBlock x:Name="R2Value" Text="" FontSize="12" FontWeight="Medium" HorizontalAlignment="Right" Foreground="#33B873"/>
-        </Grid>
-        <Border Height="6" CornerRadius="3" Background="#24FFFFFF" Margin="0,5" ClipToBounds="True">
-          <Border x:Name="R2Fill" Height="6" CornerRadius="3" HorizontalAlignment="Left" Width="0" Background="#33B873"/>
-        </Border>
-        <TextBlock x:Name="R2Sub" Text="" FontSize="10.5" Foreground="#66FFFFFF"/>
-      </StackPanel>
-      <Rectangle Height="1" Fill="#14FFFFFF" Margin="0,8"/>
+      <!-- 额度行 2 -->
+      <Grid>
+        <TextBlock x:Name="R2Label" Text="📅  每周额度" FontSize="13.5" FontWeight="SemiBold" Foreground="#EEF0F4"/>
+        <TextBlock x:Name="R2Value" Text="" FontSize="13" HorizontalAlignment="Right" Foreground="#E2E6EA"/>
+      </Grid>
+      <Border Height="7" CornerRadius="3.5" Background="#2A2D33" Margin="0,6" ClipToBounds="True">
+        <Border x:Name="R2Fill" Height="7" CornerRadius="3.5" HorizontalAlignment="Left" Width="0" Background="#33B873"/>
+      </Border>
+      <TextBlock x:Name="R2Sub" Text="" FontSize="11" Foreground="#73FFFFFF"/>
+      <Rectangle Height="0" Margin="0,7"/>
 
-      <StackPanel>
-        <Grid>
-          <TextBlock x:Name="R3Label" Text="MCP 本月" FontSize="12.5" FontWeight="SemiBold" Foreground="#E8EAF0"/>
-          <TextBlock x:Name="R3Value" Text="" FontSize="12" FontWeight="Medium" HorizontalAlignment="Right" Foreground="#33B873"/>
-        </Grid>
-        <Border Height="6" CornerRadius="3" Background="#24FFFFFF" Margin="0,5" ClipToBounds="True">
-          <Border x:Name="R3Fill" Height="6" CornerRadius="3" HorizontalAlignment="Left" Width="0" Background="#33B873"/>
-        </Border>
-        <TextBlock x:Name="R3Sub" Text="" FontSize="10.5" Foreground="#66FFFFFF"/>
-      </StackPanel>
+      <!-- 额度行 3 -->
+      <Grid>
+        <TextBlock x:Name="R3Label" Text="🔧  MCP 工具调用 (1个月)" FontSize="13.5" FontWeight="SemiBold" Foreground="#EEF0F4"/>
+        <TextBlock x:Name="R3Value" Text="" FontSize="13" HorizontalAlignment="Right" Foreground="#E2E6EA"/>
+      </Grid>
+      <Border Height="7" CornerRadius="3.5" Background="#2A2D33" Margin="0,6" ClipToBounds="True">
+        <Border x:Name="R3Fill" Height="7" CornerRadius="3.5" HorizontalAlignment="Left" Width="0" Background="#33B873"/>
+      </Border>
+      <TextBlock x:Name="R3Sub" Text="" FontSize="11" Foreground="#73FFFFFF"/>
 
       <!-- 底部:24 小时用量 -->
-      <Rectangle Height="1" Fill="#14FFFFFF" Margin="0,10,0,8"/>
+      <Rectangle Height="1" Fill="#17FFFFFF" Margin="0,12,0,10"/>
       <Grid>
-        <TextBlock Text="24 小时用量" FontSize="11.5" FontWeight="Medium" Foreground="#E8EAF0"/>
-        <TextBlock x:Name="FValue" Text="" FontSize="11.5" FontWeight="Medium" HorizontalAlignment="Right" Foreground="#F2F4F8"/>
+        <TextBlock Text="📊  近 24 小时" FontSize="12.5" FontWeight="Medium" Foreground="#EEF0F4"/>
+        <TextBlock x:Name="FValue" Text="" FontSize="12.5" FontWeight="Medium" HorizontalAlignment="Right" Foreground="#F5F6F8"/>
       </Grid>
-      <TextBlock x:Name="FSub" Text="" FontSize="10.5" Foreground="#66FFFFFF" Margin="0,3,0,0"/>
-      <TextBlock Text="Ctrl+G 显示/隐藏 · 按住拖动" FontSize="10" Foreground="#40FFFFFF" Margin="0,8,0,0"/>
+      <TextBlock x:Name="FSub" Text="" FontSize="11" Foreground="#73FFFFFF" Margin="0,4,0,0"/>
+      <TextBlock Text="Ctrl+G 唤出 / 收起 · 拖拽面板可移动位置" FontSize="10.5" Foreground="#4DFFFFFF" Margin="0,9,0,0"/>
     </StackPanel>
   </Border>
 </Window>
@@ -122,8 +118,8 @@ for ($i = 1; $i -le 3; $i++) {
 $FValue = & $el 'FValue'
 $FSub   = & $el 'FSub'
 
-# 内容总宽(窗口 308 - 边框/边距),进度条按此计算填充宽
-$trackWidth = 262.0
+# 内容总宽(窗口 340 - 外边距 20 - 内边距 40),进度条按此计算填充宽
+$trackWidth = 280.0
 
 # 初始位置:默认主屏右上角;若有保存的位置且仍在屏幕范围内则恢复
 $posFile = Join-Path $env:USERPROFILE '.zcode\scripts\glm-usage-widget.pos.json'
@@ -135,7 +131,7 @@ if (Test-Path $posFile) {
     $pos = Get-Content $posFile -Raw | ConvertFrom-Json
     if ($pos.Left -is [double] -and $pos.Top -is [double] -and
         $pos.Left -ge ($wa.Left - 20) -and ($pos.Left + $win.Width) -le ($wa.Right + 20) -and
-        $pos.Top -ge ($wa.Top - 20) -and ($pos.Top + 200) -le ($wa.Bottom + 20)) {
+        $pos.Top -ge ($wa.Top - 20) -and ($pos.Top + 220) -le ($wa.Bottom + 20)) {
       $win.Left = $pos.Left
       $win.Top = $pos.Top
     }
@@ -153,12 +149,12 @@ function Brush($hex) { $script:bc.ConvertFromString($hex) }
 function RateColor([double]$p) {
   if ($p -ge 85) { '#FF5A5A' } elseif ($p -ge 60) { '#FFA94D' } else { '#33B873' }
 }
-function Set-Row($row, $label, $pct, $sub) {
+# 行结构:左标签 / 右数值(中性浅色) / 胶囊进度条(按已用比例与档位色) / 灰色说明行
+function Set-Row($row, $label, $value, $pct, $sub) {
   $p = [double]$pct
   $col = RateColor $p
   $row.Label.Text = $label
-  $row.Value.Text = ('{0:F1}%' -f $p)
-  $row.Value.Foreground = Brush $col
+  $row.Value.Text = $value
   $row.Fill.Background = Brush $col
   $row.Fill.Width = [Math]::Round($trackWidth * [Math]::Min(100, [Math]::Max(0, $p)) / 100)
   $row.Sub.Text = $sub
@@ -176,6 +172,11 @@ function Format-Reset($ms) {
   if ($span.Minutes -or ($span.Days -eq 0 -and $span.Hours -eq 0)) { $parts += ("{0} 分钟" -f $span.Minutes) }
   if (-not $parts) { $parts += '不到 1 分钟' }
   return ($parts -join ' ') + '后'
+}
+function Format-Tokens([double]$v) {
+  if ($v -ge 1e8) { return '{0:F2} 亿' -f ($v / 1e8) }
+  if ($v -ge 1e4) { return '{0:F1} 万' -f ($v / 1e4) }
+  return '{0:N0}' -f $v
 }
 
 function Invoke-Refresh {
@@ -197,18 +198,19 @@ function Invoke-Refresh {
   foreach ($l in $q.limits) {
     $p = [double]$l.percentage
     if ($l.type -eq 'TIME_LIMIT') {
-      Set-Row $rows[2] 'MCP 本月' $p ("已用 {0} / {1} 次 · 剩余 {2}" -f $l.currentValue, $l.usage, $l.remaining)
+      Set-Row $rows[2] '🔧  MCP 工具调用 (1个月)' ('{0:N0} / {1:N0} 次' -f $l.currentValue, $l.usage) $p `
+        ('剩余 {0:N0} · ↻ {1} 重置 · {2}' -f $l.remaining, (Format-Clock $l.nextResetTime), (Format-Reset $l.nextResetTime))
     } elseif ($l.unit -eq 3) {
-      Set-Row $rows[0] '5 小时 Prompt 池' $p ("剩余 {0:F1}% · {1}重置" -f (100 - $p), (Format-Reset $l.nextResetTime))
+      Set-Row $rows[0] '🕐  5 小时 Prompt 池' ('剩余 {0:F1}%' -f (100 - $p)) $p `
+        ('↻ {0} 重置 · {1}' -f (Format-Clock $l.nextResetTime), (Format-Reset $l.nextResetTime))
     } elseif ($l.unit -eq 6) {
-      Set-Row $rows[1] '每周额度' $p ("剩余 {0:F1}% · {2} {1}重置" -f (100 - $p), (Format-Reset $l.nextResetTime), (Format-Clock $l.nextResetTime))
+      Set-Row $rows[1] '📅  每周额度' ('剩余 {0:F1}%' -f (100 - $p)) $p `
+        ('↻ {0} 重置 · {1}' -f (Format-Clock $l.nextResetTime), (Format-Reset $l.nextResetTime))
     }
   }
   $t = $d.modelUsage.totalUsage
-  $tk = [double]$t.totalTokensUsage
-  $tkTxt = if ($tk -ge 1e8) { '{0:F2} 亿' -f ($tk / 1e8) } else { '{0:F1} 万' -f ($tk / 1e4) }
-  $FValue.Text = ('{0} 次 · {1} tokens' -f $t.totalModelCallCount, $tkTxt)
-  $models = @($t.modelSummaryList | ForEach-Object { '{0} {1:F1} 万' -f $_.modelName, ([double]$_.totalTokens / 1e4) })
+  $FValue.Text = ('{0:N0} 次 · {1} tokens' -f $t.totalModelCallCount, (Format-Tokens ([double]$t.totalTokensUsage)))
+  $models = @($t.modelSummaryList | ForEach-Object { '{0} {1}' -f $_.modelName, (Format-Tokens ([double]$_.totalTokens)) })
   $FSub.Text = $models -join ' · '
   $Meta.Text = ('{0} 套餐 · 更新于 {1}' -f $q.level.ToUpper(), (Get-Date -Format 'HH:mm:ss'))
 }
@@ -220,7 +222,7 @@ $timer.Interval = [TimeSpan]::FromMinutes($refreshMinutes)
 $timer.Add_Tick({ Invoke-Refresh })
 
 # 标题栏按钮:↻ 刷新,✕ 收起(隐藏不退出)
-$BtnRefresh.Add_MouseEnter({ $BtnRefresh.Foreground = Brush '#F2F4F8' })
+$BtnRefresh.Add_MouseEnter({ $BtnRefresh.Foreground = Brush '#F5F6F8' })
 $BtnRefresh.Add_MouseLeave({ $BtnRefresh.Foreground = Brush '#99A0AA' })
 $BtnRefresh.Add_MouseLeftButtonUp({ Invoke-Refresh })
 $BtnClose.Add_MouseEnter({ $BtnClose.Foreground = Brush '#FF5A5A' })
