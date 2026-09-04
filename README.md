@@ -97,7 +97,7 @@ node "$(ls -d "$HOME/.zcode/cli/plugins/cache"/*/glm-usage/*/skills/glm-usage/sc
 
 | 设备 | UI | 说明 |
 |---|---|---|
-| **Windows** | WPF 磨砂玻璃卡片(浅黑玻璃,社区原版风格) | Ctrl+G 显示/隐藏;启动 ZCode 自动唤起;✕ 隐藏、右键退出 |
+| **Windows** | WPF 磨砂玻璃卡片(浅黑玻璃,社区原版风格) | Ctrl+G 显示/隐藏;启动 ZCode 自动唤起;ZCode 完全退出时随之退出;✕ 隐藏、右键退出 |
 | **macOS** | 原生 HUD 面板(社区移植的 GLMUsageHUD) | 编译一次即可:进入插件目录 `macos/` 执行 `bash build.sh`,生成 `GLMUsageHUD.app`;之后每次会话自动在后台打开 |
 | 其他系统 | (无悬浮窗,仅命令/技能/注入) | — |
 

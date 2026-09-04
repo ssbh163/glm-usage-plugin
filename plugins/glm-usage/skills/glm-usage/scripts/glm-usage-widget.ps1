@@ -300,8 +300,16 @@ $zcodeTimer.Add_Tick({
   if ($PSCommandPath -and -not (Test-Path $PSCommandPath)) { [Environment]::Exit(0) }
   $running = [bool](Get-Process -Name 'ZCode' -ErrorAction SilentlyContinue)
   if ($running -and -not $script:zcodeWasRunning) {
+    # ZCode 启动:唤起
     if (-not $win.IsVisible) { $win.Show() }
     $win.Activate()
+  }
+  elseif (-not $running -and $script:zcodeWasRunning) {
+    # ZCode 完全退出:悬浮窗随之退出(生命周期完全绑定)
+    try { if ($script:helper) { [GLMNative.Hotkey]::UnregisterHotKey($script:helper.Handle, 0xB001) | Out-Null } } catch { }
+    $timer.Stop()
+    $win.Close()
+    [Environment]::Exit(0)
   }
   $script:zcodeWasRunning = $running
 })
