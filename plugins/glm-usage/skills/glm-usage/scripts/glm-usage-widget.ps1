@@ -35,7 +35,7 @@ $xamlText = @'
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="GLM Usage" Topmost="True" WindowStyle="None" AllowsTransparency="True"
         Background="Transparent" ShowInTaskbar="False" ResizeMode="NoResize" ShowActivated="False"
-        Width="340" SizeToContent="Height">
+        Width="415" SizeToContent="Height">
   <Window.ContextMenu>
     <ContextMenu>
       <MenuItem x:Name="MenuRefresh" Header="立即刷新"/>
@@ -44,7 +44,7 @@ $xamlText = @'
     </ContextMenu>
   </Window.ContextMenu>
   <Border CornerRadius="16" Background="#F01C1F24" BorderBrush="#1AFFFFFF" BorderThickness="1"
-          Margin="10" Padding="20,16">
+          Margin="10" Padding="20,14">
     <StackPanel>
       <!-- 标题栏 -->
       <Grid>
@@ -56,48 +56,48 @@ $xamlText = @'
                      Cursor="Hand" ToolTip="收起面板(Ctrl+G 唤回;右键菜单可退出)"/>
         </StackPanel>
       </Grid>
-      <TextBlock x:Name="Meta" Text="正在读取…" FontSize="11" Foreground="#66FFFFFF" Margin="0,6,0,14"/>
+      <TextBlock x:Name="Meta" Text="正在读取…" FontSize="11" Foreground="#66FFFFFF" Margin="0,5,0,12"/>
 
       <!-- 额度行 1 -->
       <Grid>
         <TextBlock x:Name="R1Label" Text="🕐  5 小时 Prompt 池" FontSize="13.5" FontWeight="SemiBold" Foreground="#EEF0F4"/>
         <TextBlock x:Name="R1Value" Text="" FontSize="13" HorizontalAlignment="Right" Foreground="#E2E6EA"/>
       </Grid>
-      <Border Height="7" CornerRadius="3.5" Background="#2A2D33" Margin="0,6" ClipToBounds="True">
+      <Border Height="7" CornerRadius="3.5" Background="#2A2D33" Margin="0,5" ClipToBounds="True">
         <Border x:Name="R1Fill" Height="7" CornerRadius="3.5" HorizontalAlignment="Left" Width="0" Background="#33B873"/>
       </Border>
       <TextBlock x:Name="R1Sub" Text="" FontSize="11" Foreground="#73FFFFFF"/>
-      <Rectangle Height="0" Margin="0,7"/>
+      <Rectangle Height="0" Margin="0,5"/>
 
       <!-- 额度行 2 -->
       <Grid>
         <TextBlock x:Name="R2Label" Text="📅  每周额度" FontSize="13.5" FontWeight="SemiBold" Foreground="#EEF0F4"/>
         <TextBlock x:Name="R2Value" Text="" FontSize="13" HorizontalAlignment="Right" Foreground="#E2E6EA"/>
       </Grid>
-      <Border Height="7" CornerRadius="3.5" Background="#2A2D33" Margin="0,6" ClipToBounds="True">
+      <Border Height="7" CornerRadius="3.5" Background="#2A2D33" Margin="0,5" ClipToBounds="True">
         <Border x:Name="R2Fill" Height="7" CornerRadius="3.5" HorizontalAlignment="Left" Width="0" Background="#33B873"/>
       </Border>
       <TextBlock x:Name="R2Sub" Text="" FontSize="11" Foreground="#73FFFFFF"/>
-      <Rectangle Height="0" Margin="0,7"/>
+      <Rectangle Height="0" Margin="0,5"/>
 
       <!-- 额度行 3 -->
       <Grid>
         <TextBlock x:Name="R3Label" Text="🔧  MCP 工具调用 (1个月)" FontSize="13.5" FontWeight="SemiBold" Foreground="#EEF0F4"/>
         <TextBlock x:Name="R3Value" Text="" FontSize="13" HorizontalAlignment="Right" Foreground="#E2E6EA"/>
       </Grid>
-      <Border Height="7" CornerRadius="3.5" Background="#2A2D33" Margin="0,6" ClipToBounds="True">
+      <Border Height="7" CornerRadius="3.5" Background="#2A2D33" Margin="0,5" ClipToBounds="True">
         <Border x:Name="R3Fill" Height="7" CornerRadius="3.5" HorizontalAlignment="Left" Width="0" Background="#33B873"/>
       </Border>
       <TextBlock x:Name="R3Sub" Text="" FontSize="11" Foreground="#73FFFFFF"/>
 
       <!-- 底部:24 小时用量 -->
-      <Rectangle Height="1" Fill="#17FFFFFF" Margin="0,12,0,10"/>
+      <Rectangle Height="1" Fill="#17FFFFFF" Margin="0,10,0,8"/>
       <Grid>
         <TextBlock Text="📊  近 24 小时" FontSize="12.5" FontWeight="Medium" Foreground="#EEF0F4"/>
         <TextBlock x:Name="FValue" Text="" FontSize="12.5" FontWeight="Medium" HorizontalAlignment="Right" Foreground="#F5F6F8"/>
       </Grid>
       <TextBlock x:Name="FSub" Text="" FontSize="11" Foreground="#73FFFFFF" Margin="0,4,0,0"/>
-      <TextBlock Text="Ctrl+G 唤出 / 收起 · 拖拽面板可移动位置" FontSize="10.5" Foreground="#4DFFFFFF" Margin="0,9,0,0"/>
+      <TextBlock Text="Ctrl+G 唤出 / 收起 · 拖拽面板可移动位置" FontSize="10.5" Foreground="#4DFFFFFF" Margin="0,7,0,0"/>
     </StackPanel>
   </Border>
 </Window>
@@ -119,7 +119,7 @@ $FValue = & $el 'FValue'
 $FSub   = & $el 'FSub'
 
 # 内容总宽(窗口 340 - 外边距 20 - 内边距 40),进度条按此计算填充宽
-$trackWidth = 280.0
+$trackWidth = 355.0
 
 # 初始位置:默认主屏右上角;若有保存的位置且仍在屏幕范围内则恢复
 $posFile = Join-Path $env:USERPROFILE '.zcode\scripts\glm-usage-widget.pos.json'
@@ -131,7 +131,7 @@ if (Test-Path $posFile) {
     $pos = Get-Content $posFile -Raw | ConvertFrom-Json
     if ($pos.Left -is [double] -and $pos.Top -is [double] -and
         $pos.Left -ge ($wa.Left - 20) -and ($pos.Left + $win.Width) -le ($wa.Right + 20) -and
-        $pos.Top -ge ($wa.Top - 20) -and ($pos.Top + 220) -le ($wa.Bottom + 20)) {
+        $pos.Top -ge ($wa.Top - 20) -and ($pos.Top + 240) -le ($wa.Bottom + 20)) {
       $win.Left = $pos.Left
       $win.Top = $pos.Top
     }
