@@ -119,10 +119,27 @@ if (argv.includes('--uninstall')) {
   const cliConfig = path.join(home, '.zcode', 'cli', 'config.json');
   try {
     const cfg = JSON.parse(fs.readFileSync(cliConfig, 'utf8'));
-    if (cfg.hooks) {
-      delete cfg.hooks;
-      fs.writeFileSync(cliConfig, JSON.stringify(cfg, null, 2) + '\n');
-      removed.push(cliConfig + ' (hooks)');
+    if (cfg.hooks && cfg.hooks.events) {
+      // 只移除引用了 glm-usage 的 hook 条目,保留用户自己的其他 hooks
+      const hookText = (h) => JSON.stringify(h);
+      let touched = false;
+      for (const ev of Object.keys(cfg.hooks.events)) {
+        const groups = cfg.hooks.events[ev] || [];
+        const kept = groups
+          .map((g) => (g.hooks
+            ? { ...g, hooks: g.hooks.filter((h) => !hookText(h).includes('glm-usage')) }
+            : g))
+          .filter((g) => !g.hooks || g.hooks.length > 0);
+        if (kept.length !== groups.length
+          || kept.some((g, i) => hookText(g) !== hookText(groups[i]))) touched = true;
+        if (kept.length) cfg.hooks.events[ev] = kept;
+        else delete cfg.hooks.events[ev];
+      }
+      if (Object.keys(cfg.hooks.events).length === 0) delete cfg.hooks;
+      if (touched) {
+        fs.writeFileSync(cliConfig, JSON.stringify(cfg, null, 2) + '\n');
+        removed.push(cliConfig + ' (glm-usage hooks)');
+      }
     }
   } catch { /* 配置读取失败则跳过 */ }
   console.log('卸载完成。已清除:');
