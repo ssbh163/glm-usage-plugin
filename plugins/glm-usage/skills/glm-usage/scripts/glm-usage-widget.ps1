@@ -20,9 +20,9 @@ public class GLMComposition {
   public struct WCAD { public int Attrib; public IntPtr Data; public int SizeOfData; }
   [DllImport("user32.dll")]
   public static extern int SetWindowCompositionAttribute(IntPtr hwnd, ref WCAD data);
-  // AccentState 4 = ACCENT_ENABLE_ACRYLICBLURBEHIND; gradient 为 0xAABBGGRR 浅黑色调
+  // AccentState 3 = ACCENT_ENABLE_BLURBEHIND; gradient 为 0xAABBGGRR 浅黑色调
   public static bool EnableAcrylic(IntPtr hwnd, uint gradient) {
-    var ap = new AccentPolicy { AccentState = 4, AccentFlags = 2, GradientColor = gradient };
+    var ap = new AccentPolicy { AccentState = 3, AccentFlags = 2, GradientColor = gradient };
     IntPtr p = Marshal.AllocHGlobal(Marshal.SizeOf(ap));
     Marshal.StructureToPtr(ap, p, false);
     var d = new WCAD { Attrib = 19, Data = p, SizeOfData = Marshal.SizeOf(ap) };
@@ -67,7 +67,7 @@ $xamlText = @'
       <MenuItem x:Name="MenuExit" Header="退出"/>
     </ContextMenu>
   </Window.ContextMenu>
-  <Border x:Name="Root" CornerRadius="16" Background="#01000000" BorderBrush="#26FFFFFF" BorderThickness="1"
+  <Border x:Name="Root" CornerRadius="16" Background="#E614171C" BorderBrush="#26FFFFFF" BorderThickness="1"
           Margin="10" Padding="20,14">
     <StackPanel>
       <!-- 标题栏 -->
@@ -269,7 +269,7 @@ $win.Add_SourceInitialized({
   [void][GLMNative.Hotkey]::RegisterHotKey($script:helper.Handle, 0xB001, $script:hotkeyModifiers, $script:hotkeyKey)
   # 磨砂玻璃:浅黑色调(60% 透明黑),失败时回退为不透明深色底
   $Root = $win.FindName('Root')
-  if (-not [GLMComposition]::EnableAcrylic($script:helper.Handle, 0x991A1A18)) {
+  if (-not [GLMComposition]::EnableAcrylic($script:helper.Handle, 0xEB1A1614)) {
     $Root.Background = [System.Windows.Media.BrushConverter]::new().ConvertFromString('#F01C1F24')
   }
   $src = [System.Windows.Interop.HwndSource]::FromHwnd($script:helper.Handle)
