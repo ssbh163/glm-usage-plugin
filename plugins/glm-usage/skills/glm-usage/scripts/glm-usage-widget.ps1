@@ -122,7 +122,7 @@ $xamlText = @'
       <!-- footer:11.5 medium labelColor,一行式;sub 10.5 tertiary -->
       <TextBlock x:Name="FLabel" Text="" FontSize="11.5" FontWeight="Medium" Foreground="#FFFFFF"/>
       <TextBlock x:Name="FSub" Text="" FontSize="10.5" Foreground="#80FFFFFF" Margin="0,3,0,0"/>
-      <TextBlock x:Name="Hint" Text="Ctrl+G 唤出 / 收起 · 拖拽面板可移动位置" FontSize="10" Foreground="#4DFFFFFF" Margin="0,2,0,0"/>
+      <TextBlock x:Name="Hint" Text="Ctrl+G 唤出 / 收起 · 拖拽面板可移动位置" FontSize="10" Foreground="#24FFFFFF" Margin="0,2,0,0"/>
     </StackPanel>
   </Border>
 </Window>
