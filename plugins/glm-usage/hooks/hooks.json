@@ -5,15 +5,11 @@
         "hooks": [
           {
             "type": "process",
-            "command": "wscript.exe",
-            "args": ["${ZCODE_PLUGIN_ROOT}/skills/glm-usage/scripts/widget-launch.vbs"],
+            "command": "node",
+            "args": ["${ZCODE_PLUGIN_ROOT}/skills/glm-usage/scripts/widget-launch.mjs"],
             "timeoutMs": 10000,
-            "statusMessage": "确保 GLM 用量悬浮窗在运行"
-          }
-        ]
-      },
-      {
-        "hooks": [
+            "statusMessage": "确保 GLM 用量悬浮窗在运行(按设备选择 UI)"
+          },
           {
             "type": "command",
             "command": "node \"${ZCODE_PLUGIN_ROOT}/skills/glm-usage/scripts/glm-usage.mjs\" --hook",

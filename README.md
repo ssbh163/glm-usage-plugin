@@ -91,16 +91,23 @@ node ~/.zcode/scripts/glm-usage.mjs --json     # 原始 JSON
 node "$(ls -d "$HOME/.zcode/cli/plugins/cache"/*/glm-usage/*/skills/glm-usage/scripts/glm-usage.mjs | sort -V | tail -1)"
 ```
 
-### 3. 桌面悬浮窗(Windows,随插件启停)
+### 3. 桌面悬浮窗(按设备自动选择 UI,随插件启停)
 
-**生命周期与插件完全绑定**:安装插件后,悬浮窗由插件自带的 SessionStart hook 自动拉起,无需任何手动配置;**卸载插件后悬浮窗在数秒内自动退出**,不残留任何开机自启或后台进程。
+插件自带 **两套悬浮窗 UI**,SessionStart hook 会按当前设备自动选择,无需任何手动配置;**卸载插件后悬浮窗自动退出**,不残留开机自启或后台进程。
 
-- **Ctrl+G** 全局快捷键:随时显示/隐藏(ZCode 无此快捷键,不冲突;热键可在脚本顶部变量中修改)
-- **启动 ZCode 时自动唤起**:检测到 ZCode 从未运行变为运行即调到前台
-- 每 10 分钟自动刷新;右上角 **✕** 只是隐藏(进程驻留),**右键菜单 → 退出**彻底关闭
-- API Key 失效时标题栏明确提示,修复后自动恢复;重复启动自动去重
+| 设备 | UI | 说明 |
+|---|---|---|
+| **Windows** | WPF 磨砂玻璃卡片(浅黑玻璃,社区原版风格) | Ctrl+G 显示/隐藏;启动 ZCode 自动唤起;✕ 隐藏、右键退出 |
+| **macOS** | 原生 HUD 面板(社区移植的 GLMUsageHUD) | 编译一次即可:进入插件目录 `macos/` 执行 `bash build.sh`,生成 `GLMUsageHUD.app`;之后每次会话自动在后台打开 |
+| 其他系统 | (无悬浮窗,仅命令/技能/注入) | — |
 
-> 不装插件只想要悬浮窗?用下方"方式 C"的 `--install` 独立安装(带 Windows 登录自启),用 `--uninstall` 一键完整卸载。
+两套 UI 数据口径一致(同一个查询脚本),视觉各自贴合系统原生质感。
+
+- Windows 版:右上角 **✕** 只是隐藏(进程驻留),**右键菜单 → 退出**彻底关闭;重复启动自动去重;位置记忆
+- macOS 版:菜单栏有 ⚡ 兜底图标;详见 `macos/README.md`
+- API Key 失效时面板明确提示,修复后自动恢复
+
+> 不装插件只想要 Windows 悬浮窗?用下方"方式 C"的 `--install` 独立安装(带 Windows 登录自启),用 `--uninstall` 一键完整卸载。
 
 ### 4. 新会话自动注入
 
@@ -134,14 +141,16 @@ glm-usage-plugin/                       ← 市场仓库根目录
 ├── marketplace.json                    ← 根目录副本(兼容不同读取位置)
 └── plugins/glm-usage/                  ← 插件本体
     ├── .zcode-plugin/plugin.json
-    ├── hooks/hooks.json                ← SessionStart:拉起悬浮窗 + 注入用量摘要
+    ├── hooks/hooks.json                ← SessionStart:按设备拉起悬浮窗 + 注入用量摘要
     ├── commands/usage.md               ← /glm-usage:usage 命令
+    ├── macos/                          ← macOS 原生悬浮窗(GLMUsageHUD.swift + build.sh)
     └── skills/glm-usage/
         ├── SKILL.md
         └── scripts/
             ├── glm-usage.mjs           ← 查询脚本(零依赖,支持 --install/--uninstall)
-            ├── glm-usage-widget.ps1    ← Windows 桌面悬浮窗
-            └── widget-launch.vbs       ← 悬浮窗启动器(hook 调用)
+            ├── glm-usage-widget.ps1    ← Windows 悬浮窗(磨砂玻璃卡片)
+            ├── widget-launch.mjs       ← 跨平台启动器(按设备分发)
+            └── widget-launch.vbs       ← Windows 启动器(vbs,免黑窗)
 ```
 
 ## 卸载
