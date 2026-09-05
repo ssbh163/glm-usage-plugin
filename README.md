@@ -97,13 +97,14 @@ node "$(ls -d "$HOME/.zcode/cli/plugins/cache"/*/glm-usage/*/skills/glm-usage/sc
 
 | 设备 | UI | 说明 |
 |---|---|---|
-| **Windows** | WPF 磨砂玻璃卡片(浅黑玻璃,社区原版风格) | Ctrl+G 显示/隐藏;启动 ZCode / 新建会话自动唤回;ZCode 完全退出时随之退出;✕ 隐藏、右键退出 |
+| **Windows** | WPF 磨砂玻璃卡片(配色与 ZCode 外观同步) | Ctrl+G 显示/隐藏;启动 ZCode / 新建会话自动唤回;ZCode 完全退出时随之退出;✕ 隐藏、右键退出 |
 | **macOS** | 原生 HUD 面板(社区移植的 GLMUsageHUD) | 编译一次即可:进入插件目录 `macos/` 执行 `bash build.sh`,生成 `GLMUsageHUD.app`;之后每次会话自动在后台打开 |
 | 其他系统 | (无悬浮窗,仅命令/技能/注入) | — |
 
 两套 UI 数据口径一致(同一个查询脚本),视觉各自贴合系统原生质感。
 
 - Windows 版:右上角 **✕** 只是隐藏(进程驻留),**右键菜单 → 退出**彻底关闭;重复启动自动去重;位置记忆
+- Windows 悬浮窗配色**与 ZCode 外观主题保持一致**(每 2 秒探测 ZCode 主窗口实际配色,深浅同步切换),不读写任何 Windows 主题设置;`GLM_WIDGET_THEME=light|dark` 可强制指定
 - macOS 版:菜单栏有 ⚡ 兜底图标;详见 `macos/README.md`
 - API Key 失效时面板明确提示,修复后自动恢复
 
@@ -188,7 +189,7 @@ node glm-usage.mjs --uninstall
 
 ## 更新日志
 
-- **0.0.1**:悬浮窗唤回机制重做。单实例互斥量、命名事件与唤醒文件改为在 Add-Type/XAML 等耗时初始化之前建立;新会话通过唤醒文件毫秒级唤回,手动再次运行脚本走命名事件并带重试;hook 拉起的重复实例约 300ms 静默退出。修复新会话唤回不稳定(启动竞态丢信号)的问题。
+- **0.0.1**:悬浮窗唤回机制重做。单实例互斥量、命名事件与唤醒文件改为在 Add-Type/XAML 等耗时初始化之前建立;新会话通过唤醒文件毫秒级唤回,手动再次运行脚本走命名事件并带重试;hook 拉起的重复实例约 300ms 静默退出。修复新会话唤回不稳定(启动竞态丢信号)的问题。Windows 悬浮窗配色改为与 ZCode 外观主题保持一致(探测 ZCode 主窗口实际配色,深浅同步,`GLM_WIDGET_THEME` 可强制),不读写 Windows 主题设置。
 - 更早版本见提交历史。
 
 ## License

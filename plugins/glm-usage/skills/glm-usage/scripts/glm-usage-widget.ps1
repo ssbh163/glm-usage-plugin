@@ -1,5 +1,6 @@
 ﻿# GLM Coding Plan 桌面悬浮窗(Windows PowerShell 5.1+,零依赖)
 # UI 逐项照抄 macOS GLMUsageHUD 规格:372 宽 / 18 内边距 / 16 圆角 / 6px 胶囊进度条 / macOS 标签色阶梯
+# 配色与 ZCode 外观主题保持一致(探测 ZCode 窗口实际配色,深浅同步);GLM_WIDGET_THEME=light|dark 可强制
 # 生命周期与插件绑定:由插件 SessionStart hook 拉起,插件卸载(本脚本被删)后自动退出
 $ErrorActionPreference = 'SilentlyContinue'
 [Console]::OutputEncoding = [Text.Encoding]::UTF8
@@ -56,6 +57,14 @@ public class GLMComposition {
 }
 '@
 
+# ZCode 窗口像素探测:PrintWindow 截 ZCode 主窗口,采样最左侧栏亮度判断深浅
+Add-Type -AssemblyName System.Drawing
+Add-Type -Namespace GLMNative -Name ZCodeProbe -MemberDefinition @'
+[DllImport("user32.dll")] public static extern bool PrintWindow(IntPtr hwnd, IntPtr hdc, uint flags);
+[DllImport("user32.dll")] public static extern bool GetWindowRect(IntPtr hwnd, out RECT rect);
+[StructLayout(LayoutKind.Sequential)] public struct RECT { public int Left, Top, Right, Bottom; }
+'@
+
 $scriptPath = Join-Path $env:USERPROFILE '.zcode\scripts\glm-usage.mjs'
 if (-not (Test-Path $scriptPath)) {
   $cached = Get-ChildItem "$env:USERPROFILE\.zcode\cli\plugins\cache\*\glm-usage\*\skills\glm-usage\scripts\glm-usage.mjs" |
@@ -73,6 +82,18 @@ $xamlText = @'
         Title="GLM Usage" Topmost="True" WindowStyle="None" AllowsTransparency="True"
         Background="Transparent" ShowInTaskbar="False" ResizeMode="NoResize" ShowActivated="False"
         Width="372" SizeToContent="Height">
+  <Window.Resources>
+    <!-- 配色走 DynamicResource,Apply-Theme 按系统浅色/深色整体切换(对齐 macOS 版材质策略) -->
+    <SolidColorBrush x:Key="LabelBrush" Color="#FFFFFF"/>
+    <SolidColorBrush x:Key="SecondaryBrush" Color="#A6FFFFFF"/>
+    <SolidColorBrush x:Key="ValueBrush" Color="#8CFFFFFF"/>
+    <SolidColorBrush x:Key="TertiaryBrush" Color="#80FFFFFF"/>
+    <SolidColorBrush x:Key="QuaternaryBrush" Color="#24FFFFFF"/>
+    <SolidColorBrush x:Key="TrackBrush" Color="#24FFFFFF"/>
+    <SolidColorBrush x:Key="SeparatorBrush" Color="#2EFFFFFF"/>
+    <SolidColorBrush x:Key="BorderBrushR" Color="#1AFFFFFF"/>
+    <SolidColorBrush x:Key="RootBgBrush" Color="#E014171C"/>
+  </Window.Resources>
   <Window.ContextMenu>
     <ContextMenu>
       <MenuItem x:Name="MenuRefresh" Header="立即刷新"/>
@@ -80,61 +101,61 @@ $xamlText = @'
       <MenuItem x:Name="MenuExit" Header="退出"/>
     </ContextMenu>
   </Window.ContextMenu>
-  <Border x:Name="Root" CornerRadius="16" Background="#E014171C" BorderBrush="#1AFFFFFF" BorderThickness="1"
+  <Border x:Name="Root" CornerRadius="16" Background="{DynamicResource RootBgBrush}" BorderBrush="{DynamicResource BorderBrushR}" BorderThickness="1"
           Margin="10" Padding="18">
     <StackPanel>
       <!-- 标题行:y=pad-2,h20;按钮 13pt medium secondaryLabel -->
       <Grid Height="20">
-        <TextBlock Text="⚡ GLM Coding Plan" FontSize="14" FontWeight="Bold" Foreground="#FFFFFF"
+        <TextBlock Text="⚡ GLM Coding Plan" FontSize="14" FontWeight="Bold" Foreground="{DynamicResource LabelBrush}"
                    VerticalAlignment="Center"/>
         <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
-          <TextBlock x:Name="BtnRefresh" Text="↻" FontSize="13" Foreground="#A6FFFFFF" Cursor="Hand"
+          <TextBlock x:Name="BtnRefresh" Text="↻" FontSize="13" Foreground="{DynamicResource SecondaryBrush}" Cursor="Hand"
                      ToolTip="立即刷新" Margin="0,0,12,0"/>
-          <TextBlock x:Name="BtnClose" Text="✕" FontSize="13" FontWeight="Medium" Foreground="#A6FFFFFF"
+          <TextBlock x:Name="BtnClose" Text="✕" FontSize="13" FontWeight="Medium" Foreground="{DynamicResource SecondaryBrush}"
                      Cursor="Hand" ToolTip="收起面板(Ctrl+G 唤回;右键菜单可退出)"/>
         </StackPanel>
       </Grid>
       <!-- meta:14 高,+12 -->
-      <TextBlock x:Name="Meta" Text="正在读取…" FontSize="10.5" Foreground="#80FFFFFF" Margin="0,1,0,12"/>
+      <TextBlock x:Name="Meta" Text="正在读取…" FontSize="10.5" Foreground="{DynamicResource TertiaryBrush}" Margin="0,1,0,12"/>
 
       <!-- 额度行 = QuotaRowView(46):标题16 → +4 → 条6 → +4 → sub14,行间 8 -->
       <StackPanel x:Name="Row1">
         <Grid Height="16">
-          <TextBlock x:Name="R1Label" Text="" FontSize="12.5" FontWeight="SemiBold" Foreground="#FFFFFF"/>
-          <TextBlock x:Name="R1Value" Text="" FontSize="12" FontWeight="Bold" HorizontalAlignment="Right" Foreground="#8CFFFFFF"/>
+          <TextBlock x:Name="R1Label" Text="" FontSize="12.5" FontWeight="SemiBold" Foreground="{DynamicResource LabelBrush}"/>
+          <TextBlock x:Name="R1Value" Text="" FontSize="12" FontWeight="Bold" HorizontalAlignment="Right" Foreground="{DynamicResource ValueBrush}"/>
         </Grid>
-        <Border Height="6" CornerRadius="3" Background="#24FFFFFF" Margin="0,4,0,4" ClipToBounds="True">
+        <Border Height="6" CornerRadius="3" Background="{DynamicResource TrackBrush}" Margin="0,4,0,4" ClipToBounds="True">
           <Border x:Name="R1Fill" Height="6" CornerRadius="3" HorizontalAlignment="Left" Width="0" Background="#33B873"/>
         </Border>
-        <TextBlock x:Name="R1Sub" Text="" FontSize="10.5" Foreground="#24FFFFFF"/>
+        <TextBlock x:Name="R1Sub" Text="" FontSize="10.5" Foreground="{DynamicResource QuaternaryBrush}"/>
       </StackPanel>
       <StackPanel x:Name="Row2" Margin="0,8,0,0">
         <Grid Height="16">
-          <TextBlock x:Name="R2Label" Text="" FontSize="12.5" FontWeight="SemiBold" Foreground="#FFFFFF"/>
-          <TextBlock x:Name="R2Value" Text="" FontSize="12" FontWeight="Bold" HorizontalAlignment="Right" Foreground="#8CFFFFFF"/>
+          <TextBlock x:Name="R2Label" Text="" FontSize="12.5" FontWeight="SemiBold" Foreground="{DynamicResource LabelBrush}"/>
+          <TextBlock x:Name="R2Value" Text="" FontSize="12" FontWeight="Bold" HorizontalAlignment="Right" Foreground="{DynamicResource ValueBrush}"/>
         </Grid>
-        <Border Height="6" CornerRadius="3" Background="#24FFFFFF" Margin="0,4,0,4" ClipToBounds="True">
+        <Border Height="6" CornerRadius="3" Background="{DynamicResource TrackBrush}" Margin="0,4,0,4" ClipToBounds="True">
           <Border x:Name="R2Fill" Height="6" CornerRadius="3" HorizontalAlignment="Left" Width="0" Background="#33B873"/>
         </Border>
-        <TextBlock x:Name="R2Sub" Text="" FontSize="10.5" Foreground="#24FFFFFF"/>
+        <TextBlock x:Name="R2Sub" Text="" FontSize="10.5" Foreground="{DynamicResource QuaternaryBrush}"/>
       </StackPanel>
       <StackPanel x:Name="Row3" Margin="0,8,0,0">
         <Grid Height="16">
-          <TextBlock x:Name="R3Label" Text="" FontSize="12.5" FontWeight="SemiBold" Foreground="#FFFFFF"/>
-          <TextBlock x:Name="R3Value" Text="" FontSize="12" FontWeight="Bold" HorizontalAlignment="Right" Foreground="#8CFFFFFF"/>
+          <TextBlock x:Name="R3Label" Text="" FontSize="12.5" FontWeight="SemiBold" Foreground="{DynamicResource LabelBrush}"/>
+          <TextBlock x:Name="R3Value" Text="" FontSize="12" FontWeight="Bold" HorizontalAlignment="Right" Foreground="{DynamicResource ValueBrush}"/>
         </Grid>
-        <Border Height="6" CornerRadius="3" Background="#24FFFFFF" Margin="0,4,0,4" ClipToBounds="True">
+        <Border Height="6" CornerRadius="3" Background="{DynamicResource TrackBrush}" Margin="0,4,0,4" ClipToBounds="True">
           <Border x:Name="R3Fill" Height="6" CornerRadius="3" HorizontalAlignment="Left" Width="0" Background="#33B873"/>
         </Border>
-        <TextBlock x:Name="R3Sub" Text="" FontSize="10.5" Foreground="#24FFFFFF"/>
+        <TextBlock x:Name="R3Sub" Text="" FontSize="10.5" Foreground="{DynamicResource QuaternaryBrush}"/>
       </StackPanel>
 
       <!-- +2 分隔线 +11 -->
-      <Rectangle Height="1" Fill="#2EFFFFFF" Margin="0,10,0,10"/>
+      <Rectangle Height="1" Fill="{DynamicResource SeparatorBrush}" Margin="0,10,0,10"/>
       <!-- footer:11.5 medium labelColor,一行式;sub 10.5 tertiary -->
-      <TextBlock x:Name="FLabel" Text="" FontSize="11.5" FontWeight="Medium" Foreground="#FFFFFF"/>
-      <TextBlock x:Name="FSub" Text="" FontSize="10.5" Foreground="#80FFFFFF" Margin="0,3,0,0"/>
-      <TextBlock x:Name="Hint" Text="Ctrl+G 唤出 / 收起 · 拖拽面板可移动位置" FontSize="10" Foreground="#24FFFFFF" Margin="0,2,0,0"/>
+      <TextBlock x:Name="FLabel" Text="" FontSize="11.5" FontWeight="Medium" Foreground="{DynamicResource LabelBrush}"/>
+      <TextBlock x:Name="FSub" Text="" FontSize="10.5" Foreground="{DynamicResource TertiaryBrush}" Margin="0,3,0,0"/>
+      <TextBlock x:Name="Hint" Text="Ctrl+G 唤出 / 收起 · 拖拽面板可移动位置" FontSize="10" Foreground="{DynamicResource QuaternaryBrush}" Margin="0,2,0,0"/>
     </StackPanel>
   </Border>
 </Window>
@@ -184,6 +205,79 @@ function Save-Pos {
 
 $bc = New-Object System.Windows.Media.BrushConverter
 function Brush($hex) { $script:bc.ConvertFromString($hex) }
+
+# —— 主题:与 ZCode 外观保持一致(像素探测 ZCode 主窗口侧边栏),不读写任何 Windows 主题设置 ——
+# 探测失败(窗口最小化/截取失败)沿用最近一次结果;从未成功过才回退 Windows 应用模式(只读)
+# 浅色 = macOS 浅色标签阶梯(#3C3C43 系);GLM_WIDGET_THEME=light|dark 强制指定(调试用)
+$themeOverride = $env:GLM_WIDGET_THEME
+$themes = @{
+  dark = @{ Label='#FFFFFF'; Secondary='#A6FFFFFF'; Value='#8CFFFFFF'; Tertiary='#80FFFFFF'
+            Quaternary='#24FFFFFF'; Track='#24FFFFFF'; Separator='#2EFFFFFF'; Border='#1AFFFFFF'
+            RootSemi='#E014171C'; RootOpaque='#F01C1F24'; BlurTint=0x991A1A18 }
+  light = @{ Label='#FF1D1D1F'; Secondary='#A63C3C43'; Value='#A63C3C43'; Tertiary='#803C3C43'
+             Quaternary='#993C3C43'; Track='#293C3C43'; Separator='#2E3C3C43'; Border='#1A000000'
+             RootSemi='#E0F2F2F4'; RootOpaque='#F0F2F2F5'; BlurTint=0x99E9EAEC }
+}
+$script:lastKnownDark = $null
+function Get-IsDarkTheme {
+  if ($themeOverride -eq 'dark') { return $true }
+  if ($themeOverride -eq 'light') { return $false }
+  try {
+    $z = Get-Process -Name 'ZCode' -ErrorAction SilentlyContinue | Where-Object { $_.MainWindowHandle -ne 0 } | Select-Object -First 1
+    if ($z) {
+      $r = New-Object GLMNative.ZCodeProbe+RECT
+      [GLMNative.ZCodeProbe]::GetWindowRect($z.MainWindowHandle, [ref]$r) | Out-Null
+      $w = $r.Right - $r.Left; $h = $r.Bottom - $r.Top
+      if ($w -gt 100 -and $h -gt 100) {
+        $bmp = New-Object System.Drawing.Bitmap($w, $h)
+        $g = [System.Drawing.Graphics]::FromImage($bmp)
+        $hdc = $g.GetHdc()
+        $ok = [GLMNative.ZCodeProbe]::PrintWindow($z.MainWindowHandle, $hdc, 2)
+        $g.ReleaseHdc($hdc); $g.Dispose()
+        if ($ok) {
+          $lum = 0.0; $n = 0
+          foreach ($fx in @(0.012, 0.018, 0.024)) {
+            foreach ($fy in @(0.3, 0.5, 0.7)) {
+              $c = $bmp.GetPixel([int]($w * $fx), [int]($h * $fy))
+              $lum += 0.299 * $c.R + 0.587 * $c.G + 0.114 * $c.B; $n++
+            }
+          }
+          $bmp.Dispose()
+          $script:lastKnownDark = (($lum / $n) -lt 110)
+          return $script:lastKnownDark
+        }
+        $bmp.Dispose()
+      }
+    }
+  } catch { }
+  if ($null -ne $script:lastKnownDark) { return $script:lastKnownDark }
+  try {
+    $v = [Microsoft.Win32.Registry]::CurrentUser.OpenSubKey('Software\Microsoft\Windows\CurrentVersion\Themes\Personalize').GetValue('AppsUseLightTheme')
+    return ($v -eq 0)
+  } catch { return $true }
+}
+$script:blurOk = $true
+$script:theme = $null
+function Apply-Theme {
+  $script:theme = if (Get-IsDarkTheme) { $themes.dark } else { $themes.light }
+  $map = @{ Label='LabelBrush'; Secondary='SecondaryBrush'; Value='ValueBrush'
+            Tertiary='TertiaryBrush'; Quaternary='QuaternaryBrush'; Track='TrackBrush'
+            Separator='SeparatorBrush'; Border='BorderBrushR' }
+  foreach ($k in $map.Keys) {
+    $b = $win.Resources[$map[$k]]
+    # 注意:改 .Color 必须用 ColorConverter(返回 Color);BrushConverter 返回 Brush 会抛异常
+    if ($b) { $b.Color = [System.Windows.Media.ColorConverter]::ConvertFromString($script:theme[$k]) }
+  }
+  $rootBrush = $win.Resources['RootBgBrush']
+  if ($rootBrush) {
+    # 磨砂可用时半透明底让窗口后的模糊透出来;失败则退不透明底
+    $bg = if ($script:blurOk) { $script:theme.RootSemi } else { $script:theme.RootOpaque }
+    $rootBrush.Color = [System.Windows.Media.ColorConverter]::ConvertFromString($bg)
+  }
+  if ($script:helper -and $script:blurOk) {
+    [GLMComposition]::EnableBlur($script:helper.Handle, $script:theme.BlurTint) | Out-Null
+  }
+}
 # Fmt.tint:>=85 红,>=60 橙,其余绿(0.20,0.72,0.45)
 function RateColor([double]$p) {
   if ($p -ge 85) { '#FF5A5A' } elseif ($p -ge 60) { '#FFA94D' } else { '#33B873' }
@@ -267,11 +361,11 @@ $timer.Interval = [TimeSpan]::FromMinutes($refreshMinutes)
 $timer.Add_Tick({ Invoke-Refresh })
 
 # ↻ 刷新,✕ 收起(隐藏不退出);悬停变亮
-$BtnRefresh.Add_MouseEnter({ $BtnRefresh.Foreground = Brush '#FFFFFF' })
-$BtnRefresh.Add_MouseLeave({ $BtnRefresh.Foreground = Brush '#A6FFFFFF' })
+$BtnRefresh.Add_MouseEnter({ $BtnRefresh.Foreground = Brush $script:theme.Label })
+$BtnRefresh.Add_MouseLeave({ $BtnRefresh.Foreground = Brush $script:theme.Secondary })
 $BtnRefresh.Add_MouseLeftButtonUp({ Invoke-Refresh })
 $BtnClose.Add_MouseEnter({ $BtnClose.Foreground = Brush '#FF5A5A' })
-$BtnClose.Add_MouseLeave({ $BtnClose.Foreground = Brush '#A6FFFFFF' })
+$BtnClose.Add_MouseLeave({ $BtnClose.Foreground = Brush $script:theme.Secondary })
 $BtnClose.Add_MouseLeftButtonUp({ $win.Hide() })
 
 # 拖动(避开按钮),记忆位置
@@ -295,10 +389,11 @@ $win.Add_SourceInitialized({
     $Hint.Text = "⚠ ${mods}+$key 已被其他软件占用,快捷键不可用(改键:脚本顶部 `\$hotkeyKey)"
     $Hint.Foreground = Brush '#FFA94D'
   }
-  # 磨砂玻璃:BlurBehind + 浅黑色调;失败回退不透明深色
+  # 磨砂玻璃:BlurBehind + 随主题的深/浅 tint;失败回退不透明底色
   $Root = $win.FindName('Root')
-  if (-not [GLMComposition]::EnableBlur($script:helper.Handle, 0x991A1A18)) {
-    $Root.Background = [System.Windows.Media.BrushConverter]::new().ConvertFromString('#F01C1F24')
+  $script:blurOk = [GLMComposition]::EnableBlur($script:helper.Handle, $script:theme.BlurTint)
+  if (-not $script:blurOk) {
+    $Root.Background = Brush $script:theme.RootOpaque
   }
   $src = [System.Windows.Interop.HwndSource]::FromHwnd($script:helper.Handle)
   $src.AddHook({
@@ -316,6 +411,16 @@ $script:zcodeWasRunning = [bool](Get-Process -Name 'ZCode' -ErrorAction Silently
 $zcodeTimer = New-Object System.Windows.Threading.DispatcherTimer
 $zcodeTimer.Interval = [TimeSpan]::FromMilliseconds(2000)
 $zcodeTimer.Add_Tick({
+  # ZCode 外观跟随:探测 ZCode 主窗口配色,变化即整体换肤(并记日志便于排查)
+  $dark = Get-IsDarkTheme
+  if ($dark -ne $script:isDark) {
+    $script:isDark = $dark
+    Apply-Theme
+    try {
+      Add-Content -Path (Join-Path $env:USERPROFILE '.zcode\scripts\widget-theme.log') `
+        -Value ("{0} -> {1}" -f (Get-Date -Format 'MM/dd HH:mm:ss'), $(if ($dark) { 'dark' } else { 'light' }))
+    } catch { }
+  }
   # 自存活检测:本脚本被删(= 插件已卸载)则自行退出
   if ($PSCommandPath -and -not (Test-Path $PSCommandPath)) { [Environment]::Exit(0) }
   $running = [bool](Get-Process -Name 'ZCode' -ErrorAction SilentlyContinue)
@@ -359,6 +464,12 @@ $menuItems['退出'].Add_Click({
   try { if ($script:helper) { [GLMNative.Hotkey]::UnregisterHotKey($script:helper.Handle, 0xB001) | Out-Null } } catch { }
   $timer.Stop(); $win.Close(); [Environment]::Exit(0)
 })
+
+# 应用主题(与 ZCode 外观一致);此后 zcodeTimer 每 2 秒探测 ZCode 配色并跟随切换
+$script:isDark = Get-IsDarkTheme
+try { Apply-Theme } catch {
+  try { Add-Content (Join-Path $env:USERPROFILE '.zcode\scripts\widget-theme.log') ("startup Apply-Theme THREW: " + $_.Exception.Message) } catch { }
+}
 
 Invoke-Refresh
 $timer.Start()
