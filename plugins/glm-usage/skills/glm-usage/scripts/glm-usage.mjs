@@ -45,7 +45,7 @@ node ~/.zcode/scripts/glm-usage.mjs
 1. **5 小时 Prompt 池**:已用百分比、重置时间(倒计时)
 2. **每周额度**:已用百分比、重置时间
 3. **MCP 工具调用(每月)**:已用/总量、剩余次数、重置时间、各工具明细
-4. **当日模型用量**:调用次数、token 消耗、按模型汇总(如有)
+4. **当日模型用量**:调用次数、token 消耗、高峰期(工作日 14–18 时)/非高峰期拆分、按模型汇总(如有)
 
 如果命令执行失败,原样展示错误信息,并提示用户:API Key 存放在 ~/.zcode/v2/config.json,
 可在 ZCode 的模型设置中重新配置,或去智谱开放平台「个人编程套餐 > 用量统计」网页版查看。
@@ -320,19 +320,49 @@ async function main() {
     return;
   }
 
-  // 当日用量(失败不影响额度展示)
+  // 当日用量(失败不影响额度展示);高峰期 = 工作日(周一至周五)14:00–18:00
   const now = new Date();
   const z = (n) => String(n).padStart(2, '0');
   const fmt = (d) => `${d.getFullYear()}-${z(d.getMonth() + 1)}-${z(d.getDate())} ${z(d.getHours())}:${z(d.getMinutes())}:${z(d.getSeconds())}`;
-  const qs = `?startTime=${encodeURIComponent(fmt(new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0)))}`
-    + `&endTime=${encodeURIComponent(fmt(now))}`;
-  const [modelUsage, toolUsage] = await Promise.all([
-    get('/api/monitor/usage/model-usage' + qs).catch(() => null),
-    get('/api/monitor/usage/tool-usage' + qs).catch(() => null),
+  const qs = (start, end) => `?startTime=${encodeURIComponent(fmt(start))}&endTime=${encodeURIComponent(fmt(end))}`;
+  const dayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0);
+  // 当日高峰时段与 [当天零点, 现在] 的交集;周末或未到 14 点为 null(此时高峰用量恒为 0)
+  const peakWindow = (() => {
+    const dow = now.getDay();
+    if (dow === 0 || dow === 6) return null;
+    const start = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 14, 0, 0);
+    if (now.getTime() <= start.getTime()) return null;
+    return { start, end: new Date(Math.min(now.getTime(), start.getTime() + 4 * 3600 * 1000)) };
+  })();
+  const [modelUsage, toolUsage, peakUsage] = await Promise.all([
+    get('/api/monitor/usage/model-usage' + qs(dayStart, now)).catch(() => null),
+    get('/api/monitor/usage/tool-usage' + qs(dayStart, now)).catch(() => null),
+    peakWindow
+      ? get('/api/monitor/usage/model-usage' + qs(peakWindow.start, peakWindow.end)).catch(() => null)
+      : null,
   ]);
+  // 高峰/非高峰拆分:非高峰 = 当日总量 - 高峰;高峰窗口存在但查询失败时不拆分(只显示当日总量)
+  let usageSplit = null;
+  const total = modelUsage?.totalUsage;
+  if (total) {
+    const peakT = peakWindow === null
+      ? { totalModelCallCount: 0, totalTokensUsage: 0 }
+      : peakUsage?.totalUsage;
+    if (peakT) {
+      const pc = Number(peakT.totalModelCallCount) || 0;
+      const pt = Number(peakT.totalTokensUsage) || 0;
+      usageSplit = {
+        peak: { calls: pc, tokens: pt },
+        offPeak: {
+          calls: Math.max(0, (Number(total.totalModelCallCount) || 0) - pc),
+          tokens: Math.max(0, (Number(total.totalTokensUsage) || 0) - pt),
+        },
+      };
+    }
+  }
 
   if (asJson) {
-    console.log(JSON.stringify({ quota, modelUsage, toolUsage }, null, 2));
+    console.log(JSON.stringify({ quota, modelUsage, toolUsage, usageSplit }, null, 2));
     return;
   }
 
@@ -366,6 +396,11 @@ async function main() {
     console.log('');
     console.log(` 📊  ${bold(padEndW('当日模型用量', LABEL_W))}`
       + `${fmtNum(t.totalModelCallCount)} 次 · ${fmtTokens(t.totalTokensUsage)} tokens`);
+    if (usageSplit) {
+      const splitLine = (label, v) => dim(`      ${padEndW(label, 26)}${fmtNum(v.calls)} 次 · ${fmtTokens(v.tokens)} tokens`);
+      console.log(splitLine('高峰期(工作日 14–18 时)', usageSplit.peak));
+      console.log(splitLine('非高峰期', usageSplit.offPeak));
+    }
     const models = t.modelSummaryList || [];
     if (models.length) {
       console.log(dim(`      ${models.map((m) => `${m.modelName} ${fmtTokens(m.totalTokens)}`).join(' · ')}`));

@@ -68,7 +68,7 @@ if (-not (Test-Path $scriptPath)) {
 }
 
 # —— 以下 XAML 与 GLMUsageHUD.swift 的 HUDMetrics/HUDContentView 布局一一对应 ——
-# 面板 372 宽(高自适应,官方公式约 306);pad 18;圆角 16;边框白 10%
+# 面板 372 宽(高自适应,官方公式约 306;底部当日 高峰/非高峰 明细两行后约 330);pad 18;圆角 16;边框白 10%
 # 字号阶梯:标题 14 bold / meta 10.5 / 行标题 12.5 semibold / 行数值 12 / sub 10.5 / footer 11.5 / hint 10
 # 颜色(macOS 暗色标签阶梯):labelColor 白 / secondary 白65% / tertiary 白50% / quaternary 白30%
 $xamlText = @'
@@ -147,8 +147,16 @@ $xamlText = @'
 
       <!-- +2 分隔线 +11 -->
       <Rectangle Height="1" Fill="{DynamicResource SeparatorBrush}" Margin="0,10,0,10"/>
-      <!-- footer:11.5 medium labelColor,一行式;sub 10.5 tertiary -->
+      <!-- footer:11.5 medium labelColor 当日总量;下接 高峰(工作日 14–18 时)/非高峰 两行明细;sub 10.5 tertiary -->
       <TextBlock x:Name="FLabel" Text="" FontSize="11.5" FontWeight="Medium" Foreground="{DynamicResource LabelBrush}"/>
+      <Grid x:Name="PeakRow" Height="15" Margin="0,5,0,0">
+        <TextBlock Text="高峰期(工作日 14–18 时)" FontSize="10.5" Foreground="{DynamicResource TertiaryBrush}" VerticalAlignment="Center"/>
+        <TextBlock x:Name="PeakValue" Text="" FontSize="10.5" HorizontalAlignment="Right" Foreground="{DynamicResource SecondaryBrush}" VerticalAlignment="Center"/>
+      </Grid>
+      <Grid x:Name="OffPeakRow" Height="15" Margin="0,2,0,0">
+        <TextBlock Text="非高峰期" FontSize="10.5" Foreground="{DynamicResource TertiaryBrush}" VerticalAlignment="Center"/>
+        <TextBlock x:Name="OffPeakValue" Text="" FontSize="10.5" HorizontalAlignment="Right" Foreground="{DynamicResource SecondaryBrush}" VerticalAlignment="Center"/>
+      </Grid>
       <TextBlock x:Name="FSub" Text="" FontSize="10.5" Foreground="{DynamicResource TertiaryBrush}" Margin="0,3,0,0"/>
       <TextBlock x:Name="Hint" Text="Ctrl+G 唤出 / 收起 · 拖拽面板可移动位置" FontSize="10" Foreground="{DynamicResource QuaternaryBrush}" Margin="0,2,0,0"/>
     </StackPanel>
@@ -164,6 +172,10 @@ $BtnClose = & $el 'BtnClose'
 $FLabel = & $el 'FLabel'
 $FSub = & $el 'FSub'
 $Hint = & $el 'Hint'
+$PeakRow = & $el 'PeakRow'
+$PeakValue = & $el 'PeakValue'
+$OffPeakRow = & $el 'OffPeakRow'
+$OffPeakValue = & $el 'OffPeakValue'
 $rows = @()
 for ($i = 1; $i -le 3; $i++) {
   $rows += [pscustomobject]@{
@@ -324,6 +336,7 @@ function Invoke-Refresh {
     foreach ($r in $rows | Select-Object -Skip 1) { $r.Panel.Visibility = 'Collapsed' }
     $FLabel.Text = '可点右上角 ↻ 重试'
     $FSub.Text = ''
+    $PeakRow.Visibility = 'Collapsed'; $OffPeakRow.Visibility = 'Collapsed'
     return
   }
   foreach ($r in $rows) { $r.Panel.Visibility = 'Visible' }
@@ -343,6 +356,14 @@ function Invoke-Refresh {
   }
   $t = $d.modelUsage.totalUsage
   $FLabel.Text = ('📊  当日　{0:N0} 次 · {1} tokens' -f $t.totalModelCallCount, (Format-Tokens ([double]$t.totalTokensUsage)))
+  # 高峰(工作日 14–18 时)/非高峰拆分由脚本算好放进 usageSplit;缺省(拆分查询失败)时收起两行明细
+  if ($d.usageSplit) {
+    $PeakRow.Visibility = 'Visible'; $OffPeakRow.Visibility = 'Visible'
+    $PeakValue.Text = ('{0:N0} 次 · {1} tokens' -f [double]$d.usageSplit.peak.calls, (Format-Tokens ([double]$d.usageSplit.peak.tokens)))
+    $OffPeakValue.Text = ('{0:N0} 次 · {1} tokens' -f [double]$d.usageSplit.offPeak.calls, (Format-Tokens ([double]$d.usageSplit.offPeak.tokens)))
+  } else {
+    $PeakRow.Visibility = 'Collapsed'; $OffPeakRow.Visibility = 'Collapsed'
+  }
   $models = @($t.modelSummaryList | ForEach-Object { '{0} {1}' -f $_.modelName, (Format-Tokens ([double]$_.totalTokens)) })
   $FSub.Text = $models -join ' · '
   $Meta.Text = ('{0} 套餐 · 更新于 {1}' -f $q.level.ToUpper(), (Get-Date -Format 'HH:mm:ss'))

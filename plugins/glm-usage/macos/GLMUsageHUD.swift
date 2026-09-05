@@ -130,9 +130,21 @@ struct ModelUsageDTO: Codable {
     let totalUsage: TotalUsageDTO?
 }
 
+/// 当日用量拆分:高峰期(工作日 14–18 时)/ 非高峰期,由 glm-usage.mjs 计算好
+struct UsageSplitSideDTO: Codable {
+    let calls: Int?
+    let tokens: Double?
+}
+
+struct UsageSplitDTO: Codable {
+    let peak: UsageSplitSideDTO?
+    let offPeak: UsageSplitSideDTO?
+}
+
 struct UsageRootDTO: Codable {
     let quota: QuotaDTO?
     let modelUsage: ModelUsageDTO?
+    let usageSplit: UsageSplitDTO?
 }
 
 // MARK: - 展示用的格式化工具
@@ -437,6 +449,10 @@ final class HUDContentView: NSView {
     var rows: [QuotaRowView] = []
     let separator = NSBox()
     let footerLabel = makeLabel(11.5, .medium, .labelColor)
+    let peakLabel = makeLabel(10.5, .regular, .tertiaryLabelColor)
+    let peakValue = makeLabel(10.5, .regular, .secondaryLabelColor, align: .right)
+    let offPeakLabel = makeLabel(10.5, .regular, .tertiaryLabelColor)
+    let offPeakValue = makeLabel(10.5, .regular, .secondaryLabelColor, align: .right)
     let footerSubLabel = makeLabel(10.5, .regular, .tertiaryLabelColor)
     let hintLabel = makeLabel(10, .regular, .quaternaryLabelColor)
 
@@ -452,13 +468,17 @@ final class HUDContentView: NSView {
 
         separator.boxType = .separator
 
+        peakLabel.stringValue = "高峰期(工作日 14–18 时)"
+        offPeakLabel.stringValue = "非高峰期"
+
         for _ in 0..<3 {
             let r = QuotaRowView()
             rows.append(r)
             addSubview(r)
         }
         [titleLabel, metaLabel, refreshButton, closeButton,
-         separator, footerLabel, footerSubLabel, hintLabel].forEach { addSubview($0) }
+         separator, footerLabel, peakLabel, peakValue, offPeakLabel, offPeakValue,
+         footerSubLabel, hintLabel].forEach { addSubview($0) }
     }
     required init?(coder: NSCoder) { fatalError() }
 
@@ -496,6 +516,14 @@ final class HUDContentView: NSView {
         y += 11
         footerLabel.frame = NSRect(x: pad, y: y, width: w, height: 16)
         y += 17
+        if !peakLabel.isHidden {
+            peakLabel.frame = NSRect(x: pad, y: y, width: w, height: 15)
+            peakValue.frame = NSRect(x: pad, y: y, width: w, height: 15)
+            y += 16
+            offPeakLabel.frame = NSRect(x: pad, y: y, width: w, height: 15)
+            offPeakValue.frame = NSRect(x: pad, y: y, width: w, height: 15)
+            y += 16
+        }
         footerSubLabel.frame = NSRect(x: pad, y: y, width: w, height: 14)
         y += 15
         hintLabel.frame = NSRect(x: pad, y: y, width: w, height: 13)
@@ -504,9 +532,11 @@ final class HUDContentView: NSView {
     /// 内容高度随实际行数变化，用于自适应窗口高度
     var preferredHeight: CGFloat {
         let visibleRows = rows.filter { !$0.isHidden }.count
+        // 拆分行隐藏(查询失败)时不占高度:15+1+15+1
+        let splitH: CGFloat = peakLabel.isHidden ? 0 : 32
         return HUDMetrics.pad - 2 + 21 + 14 + 12
             + CGFloat(visibleRows) * (QuotaRowView.rowHeight + 8)
-            + 2 + 1 + 11 + 16 + 1 + 14 + 1 + 13 + HUDMetrics.pad
+            + 2 + 1 + 11 + 16 + 1 + splitH + 14 + 1 + 13 + HUDMetrics.pad
     }
 
     func render(_ dto: UsageRootDTO, hotkeyText: String) {
@@ -539,6 +569,17 @@ final class HUDContentView: NSView {
             footerLabel.stringValue = "📊  当日用量暂不可用"
             footerSubLabel.stringValue = ""
         }
+        // 高峰(工作日 14–18 时)/非高峰拆分;usageSplit 缺省(拆分查询失败)时收起两行
+        let splitViews = [peakLabel, peakValue, offPeakLabel, offPeakValue]
+        if let split = dto.usageSplit {
+            splitViews.forEach { $0.isHidden = false }
+            let pc = Int(split.peak?.calls ?? 0), pt = split.peak?.tokens ?? 0
+            let oc = Int(split.offPeak?.calls ?? 0), ot = split.offPeak?.tokens ?? 0
+            peakValue.stringValue = "\(Fmt.int(pc)) 次 · \(Fmt.tokens(pt)) tokens"
+            offPeakValue.stringValue = "\(Fmt.int(oc)) 次 · \(Fmt.tokens(ot)) tokens"
+        } else {
+            splitViews.forEach { $0.isHidden = true }
+        }
         hintLabel.stringValue = "\(hotkeyText) 唤出 / 收起 · 拖拽面板可移动位置"
         needsLayout = true
     }
@@ -553,6 +594,7 @@ final class HUDContentView: NSView {
         rows.first?.subLabel.stringValue = message
         footerLabel.stringValue = "可点右上角 ↻ 重试"
         footerSubLabel.stringValue = ""
+        [peakLabel, peakValue, offPeakLabel, offPeakValue].forEach { $0.isHidden = true }
         hintLabel.stringValue = "\(hotkeyText) 唤出 / 收起 · 拖拽面板可移动位置"
         needsLayout = true
     }
