@@ -8,7 +8,7 @@
       "name": "glm-usage",
       "source": "./plugins/glm-usage",
       "category": "development",
-      "description": "智谱官方API Key登入ZCode查看5小时和周限额"
+      "description": "用于智谱官方API Key登入ZCode查看5小时和周限额"
     }
   ]
 }
