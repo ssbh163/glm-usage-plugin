@@ -8,7 +8,7 @@
       "name": "glm-usage",
       "source": "./plugins/glm-usage",
       "category": "development",
-      "description": "通过智谱官方API Key查看账户5小时和周限额"
+      "description": "解决通过智谱官方API Key登入ZCode无法查看账户5小时和周限额的问题"
     }
   ]
 }
