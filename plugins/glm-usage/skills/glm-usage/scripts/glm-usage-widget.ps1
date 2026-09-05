@@ -12,13 +12,8 @@ $ownsMutex = $false
 try { $ownsMutex = $mutex.WaitOne(0) } catch { $ownsMutex = $true }
 if (-not $ownsMutex) {
   if ($args -notcontains 'NoShowIfExists') {
-    # 手动再次启动:唤醒已有窗口;主实例拿到互斥量后立刻创建事件,重试仅兜底
-    for ($i = 0; $i -lt 10; $i++) {
-      try {
-        [System.Threading.EventWaitHandle]::OpenExisting('Global\GLM-Usage-Widget-Show').Set() | Out-Null
-        break
-      } catch { Start-Sleep -Milliseconds 100 }
-    }
+    # 手动再次启动:唤醒已有窗口(事件由主实例拿到互斥量后立即创建,无需重试)
+    try { [System.Threading.EventWaitHandle]::OpenExisting('Global\GLM-Usage-Widget-Show').Set() | Out-Null } catch { }
   }
   exit
 }
@@ -257,7 +252,6 @@ function Get-IsDarkTheme {
   } catch { return $true }
 }
 $script:blurOk = $true
-$script:theme = $null
 function Apply-Theme {
   $script:theme = if (Get-IsDarkTheme) { $themes.dark } else { $themes.light }
   $map = @{ Label='LabelBrush'; Secondary='SecondaryBrush'; Value='ValueBrush'
