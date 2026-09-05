@@ -1,6 +1,7 @@
 ﻿# GLM Coding Plan 桌面悬浮窗(Windows PowerShell 5.1+,零依赖)
 # UI 逐项照抄 macOS GLMUsageHUD 规格:372 宽 / 18 内边距 / 16 圆角 / 6px 胶囊进度条 / macOS 标签色阶梯
 # 配色与 ZCode 外观主题保持一致(探测 ZCode 窗口实际配色,深浅同步);GLM_WIDGET_THEME=light|dark 可强制
+# 高峰期提醒横幅(周一至周五 14:00–18:00 常驻);调试:GLM_WIDGET_PEAK=on 强制显示,GLM_WIDGET_PEAK_SHIFT=<小时数> 平移模拟时钟
 # 生命周期与插件绑定:由插件 SessionStart hook 拉起,插件卸载(本脚本被删)后自动退出
 $ErrorActionPreference = 'SilentlyContinue'
 [Console]::OutputEncoding = [Text.Encoding]::UTF8
@@ -113,6 +114,17 @@ $xamlText = @'
       <!-- meta:14 高,+12 -->
       <TextBlock x:Name="Meta" Text="正在读取…" FontSize="10.5" Foreground="{DynamicResource TertiaryBrush}" Margin="0,1,0,12"/>
 
+      <!-- 高峰期横幅(周一至周五 14:00–18:00 常驻,结束自动收起):橙色倒计时 + 时段进度条 -->
+      <StackPanel x:Name="PeakBanner" Visibility="Collapsed" Margin="0,-4,0,8">
+        <Grid Height="14">
+          <TextBlock x:Name="PeakBannerLabel" Text="⚡ 高峰期进行中" FontSize="10.5" FontWeight="SemiBold" Foreground="#FFA94D" VerticalAlignment="Center"/>
+          <TextBlock x:Name="PeakBannerValue" Text="" FontSize="10.5" HorizontalAlignment="Right" Foreground="#FFA94D" VerticalAlignment="Center"/>
+        </Grid>
+        <Border Height="4" CornerRadius="2" Background="{DynamicResource TrackBrush}" Margin="0,3,0,0" ClipToBounds="True">
+          <Border x:Name="PeakBannerFill" Height="4" CornerRadius="2" HorizontalAlignment="Left" Width="0" Background="#FFA94D"/>
+        </Border>
+      </StackPanel>
+
       <!-- 额度行 = QuotaRowView(46):标题16 → +4 → 条6 → +4 → sub14,行间 8 -->
       <StackPanel x:Name="Row1">
         <Grid Height="16">
@@ -176,6 +188,10 @@ $PeakRow = & $el 'PeakRow'
 $PeakValue = & $el 'PeakValue'
 $OffPeakRow = & $el 'OffPeakRow'
 $OffPeakValue = & $el 'OffPeakValue'
+$PeakBanner = & $el 'PeakBanner'
+$PeakBannerLabel = & $el 'PeakBannerLabel'
+$PeakBannerValue = & $el 'PeakBannerValue'
+$PeakBannerFill = & $el 'PeakBannerFill'
 $rows = @()
 for ($i = 1; $i -le 3; $i++) {
   $rows += [pscustomobject]@{
@@ -322,6 +338,43 @@ function Format-Tokens([double]$v) {
   return '{0:N0}' -f $v
 }
 
+# —— 高峰期提醒:周一至周五 14:00–18:00 期间橙色横幅常驻,结束自动收起 ——
+# 调试:GLM_WIDGET_PEAK=on 无视日期强制显示;GLM_WIDGET_PEAK_SHIFT=<小时,可带小数> 把时钟整体平移(演示用)
+# 刷新挂在 zcodeTimer(2s)上,状态切换和倒计时都不需要新增定时器
+function Get-PeakNow {
+  $now = Get-Date
+  if ($env:GLM_WIDGET_PEAK_SHIFT) {
+    $h = 0.0
+    if ([double]::TryParse($env:GLM_WIDGET_PEAK_SHIFT, [Globalization.NumberStyles]::Float, $null, [ref]$h)) { $now = $now.AddHours($h) }
+  }
+  return $now
+}
+function Get-PeakWindow {
+  $now = Get-PeakNow
+  $dow = [int]$now.DayOfWeek
+  if ($env:GLM_WIDGET_PEAK -ne 'on' -and ($dow -eq 0 -or $dow -eq 6)) { return $null }
+  $start = $now.Date.AddHours(14)
+  $end = $start.AddHours(4)
+  if ($env:GLM_WIDGET_PEAK -eq 'on' -or ($now -ge $start -and $now -lt $end)) {
+    return @{ Start = $start; End = $end }
+  }
+  return $null
+}
+function Update-PeakBanner {
+  $w = Get-PeakWindow
+  if (-not $w) { $PeakBanner.Visibility = 'Collapsed'; return }
+  $now = Get-PeakNow
+  $left = $w.End - $now
+  $PeakBannerValue.Text = if ($left.TotalMinutes -lt 1) { '即将结束' }
+    elseif ($left.TotalHours -ge 1) { '还剩 {0} 小时 {1} 分' -f [int][Math]::Floor($left.TotalHours), $left.Minutes }
+    else { '还剩 {0} 分' -f $left.Minutes }
+  # 进度 = 高峰已进行时长 / 4h(14:00 起算,进入即至少画一个圆点)
+  $p = ($now - $w.Start).TotalHours / 4.0 * 100
+  $fillW = [Math]::Round($trackWidth * [Math]::Min(100, [Math]::Max(0, $p)) / 100)
+  $PeakBannerFill.Width = [Math]::Max($fillW, 4)
+  $PeakBanner.Visibility = 'Visible'
+}
+
 function Invoke-Refresh {
   $Meta.Text = '正在读取…'
   $raw = (& node $scriptPath --json 2>&1 | Out-String).Trim()
@@ -436,6 +489,8 @@ $zcodeTimer.Add_Tick({
         -Value ("{0} -> {1}" -f (Get-Date -Format 'MM/dd HH:mm:ss'), $(if ($dark) { 'dark' } else { 'light' }))
     } catch { }
   }
+  # 高峰横幅:进入/退出高峰与倒计时刷新(2s 粒度)
+  Update-PeakBanner
   # 自存活检测:本脚本被删(= 插件已卸载)则自行退出
   if ($PSCommandPath -and -not (Test-Path $PSCommandPath)) { [Environment]::Exit(0) }
   $running = [bool](Get-Process -Name 'ZCode' -ErrorAction SilentlyContinue)
@@ -486,6 +541,7 @@ try { Apply-Theme } catch {
   try { Add-Content (Join-Path $env:USERPROFILE '.zcode\scripts\widget-theme.log') ("startup Apply-Theme THREW: " + $_.Exception.Message) } catch { }
 }
 
+Update-PeakBanner
 Invoke-Refresh
 $timer.Start()
 $win.Show()

@@ -194,6 +194,9 @@ enum Fmt {
         return df.string(from: Date(timeIntervalSince1970: ms / 1000))
     }
 
+    /// 高峰横幅的警示橙(与 Windows 版 #FFA94D 一致)
+    static let peakTint = NSColor(srgbRed: 1.0, green: 0.6627, blue: 0.3020, alpha: 1.0)
+
     /// 毫秒时间戳 -> "5 天 3 小时 13 分钟后"
     static func countdown(_ ms: Double) -> String {
         let sec = Int(ms / 1000 - Date().timeIntervalSince1970)
@@ -448,6 +451,10 @@ final class HUDContentView: NSView {
     let closeButton = NSButton()
     var rows: [QuotaRowView] = []
     let separator = NSBox()
+    // 高峰期横幅(工作日 14:00–18:00 常驻,结束自动收起):橙色倒计时 + 时段进度条
+    let peakBannerLabel = makeLabel(10.5, .semibold, Fmt.peakTint)
+    let peakBannerValue = makeLabel(10.5, .regular, Fmt.peakTint, align: .right)
+    let peakBannerBar = BarView()
     let footerLabel = makeLabel(11.5, .medium, .labelColor)
     let peakLabel = makeLabel(10.5, .regular, .tertiaryLabelColor)
     let peakValue = makeLabel(10.5, .regular, .secondaryLabelColor, align: .right)
@@ -468,6 +475,10 @@ final class HUDContentView: NSView {
 
         separator.boxType = .separator
 
+        peakBannerLabel.stringValue = "⚡ 高峰期进行中"
+        peakBannerBar.tint = Fmt.peakTint
+        [peakBannerLabel, peakBannerValue, peakBannerBar].forEach { $0.isHidden = true }
+
         peakLabel.stringValue = "高峰期(工作日 14–18 时)"
         offPeakLabel.stringValue = "非高峰期"
 
@@ -477,7 +488,8 @@ final class HUDContentView: NSView {
             addSubview(r)
         }
         [titleLabel, metaLabel, refreshButton, closeButton,
-         separator, footerLabel, peakLabel, peakValue, offPeakLabel, offPeakValue,
+         separator, peakBannerLabel, peakBannerValue, peakBannerBar,
+         footerLabel, peakLabel, peakValue, offPeakLabel, offPeakValue,
          footerSubLabel, hintLabel].forEach { addSubview($0) }
     }
     required init?(coder: NSCoder) { fatalError() }
@@ -504,6 +516,13 @@ final class HUDContentView: NSView {
         y += 21
         metaLabel.frame = NSRect(x: pad, y: y, width: w, height: 14)
         y += 14 + 12
+        if !peakBannerLabel.isHidden {
+            peakBannerLabel.frame = NSRect(x: pad, y: y, width: w, height: 14)
+            peakBannerValue.frame = NSRect(x: pad, y: y, width: w, height: 14)
+            y += 15
+            peakBannerBar.frame = NSRect(x: pad, y: y, width: w, height: 4)
+            y += 4 + 8
+        }
 
         for r in rows {
             r.frame = NSRect(x: pad, y: y, width: w, height: QuotaRowView.rowHeight)
@@ -532,14 +551,41 @@ final class HUDContentView: NSView {
     /// 内容高度随实际行数变化，用于自适应窗口高度
     var preferredHeight: CGFloat {
         let visibleRows = rows.filter { !$0.isHidden }.count
+        // 高峰横幅隐藏时不占高度:14+1 + 4+8
+        let bannerH: CGFloat = peakBannerLabel.isHidden ? 0 : 27
         // 拆分行隐藏(查询失败)时不占高度:15+1+15+1
         let splitH: CGFloat = peakLabel.isHidden ? 0 : 32
         return HUDMetrics.pad - 2 + 21 + 14 + 12
+            + bannerH
             + CGFloat(visibleRows) * (QuotaRowView.rowHeight + 8)
             + 2 + 1 + 11 + 16 + 1 + splitH + 14 + 1 + 13 + HUDMetrics.pad
     }
 
+    /// 高峰期(周一至周五 14:00–18:00)常驻橙色横幅:倒计时 + 时段进度,结束自动收起。
+    /// 挂在每分钟的 countdownTimer 上,与额度倒计时同频刷新,不新增定时器。
+    func updatePeakBanner() {
+        let cal = Calendar.current
+        let now = Date()
+        let dow = cal.component(.weekday, from: now)   // 1=周日 … 7=周六
+        let start = cal.startOfDay(for: now).addingTimeInterval(14 * 3600)
+        let end = start.addingTimeInterval(4 * 3600)
+        let views = [peakBannerLabel, peakBannerValue, peakBannerBar]
+        guard dow >= 2 && dow <= 6, now >= start, now < end else {
+            views.forEach { $0.isHidden = true }
+            needsLayout = true
+            return
+        }
+        let left = Int(end.timeIntervalSince(now))
+        if left < 60 { peakBannerValue.stringValue = "即将结束" }
+        else if left >= 3600 { peakBannerValue.stringValue = "还剩 \(left / 3600) 小时 \((left % 3600) / 60) 分" }
+        else { peakBannerValue.stringValue = "还剩 \((left % 3600) / 60) 分" }
+        peakBannerBar.progress = CGFloat(max(0, min(1, now.timeIntervalSince(start) / (4 * 3600))))
+        views.forEach { $0.isHidden = false }
+        needsLayout = true
+    }
+
     func render(_ dto: UsageRootDTO, hotkeyText: String) {
+        updatePeakBanner()
         let level = (dto.quota?.level ?? "").uppercased()
         let df = DateFormatter()
         df.dateFormat = "HH:mm:ss"
@@ -585,6 +631,7 @@ final class HUDContentView: NSView {
     }
 
     func renderError(_ message: String, hotkeyText: String) {
+        updatePeakBanner()
         metaLabel.stringValue = "读取失败"
         for row in rows { row.isHidden = true }
         rows.first?.isHidden = false
@@ -805,11 +852,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             guard let self = self, self.panel.isVisible else { return }
             self.refresh()
         }
-        // 每分钟只重画倒计时文案，不重新请求接口
+        // 每分钟只重画倒计时文案与高峰横幅,不重新请求接口
         countdownTimer?.invalidate()
         countdownTimer = Timer.scheduledTimer(withTimeInterval: 60, repeats: true) { [weak self] _ in
-            guard let self = self, let d = self.lastData, self.panel.isVisible else { return }
-            self.content.render(d, hotkeyText: self.hotkeyText)
+            guard let self = self, self.panel.isVisible else { return }
+            if let d = self.lastData {
+                self.content.render(d, hotkeyText: self.hotkeyText)
+            } else {
+                self.content.updatePeakBanner()
+            }
+            self.resizeToContent()
         }
     }
 
