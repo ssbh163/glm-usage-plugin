@@ -342,7 +342,7 @@ function Invoke-Refresh {
     }
   }
   $t = $d.modelUsage.totalUsage
-  $FLabel.Text = ('📊  近 24 小时　{0:N0} 次 · {1} tokens' -f $t.totalModelCallCount, (Format-Tokens ([double]$t.totalTokensUsage)))
+  $FLabel.Text = ('📊  当日　{0:N0} 次 · {1} tokens' -f $t.totalModelCallCount, (Format-Tokens ([double]$t.totalTokensUsage)))
   $models = @($t.modelSummaryList | ForEach-Object { '{0} {1}' -f $_.modelName, (Format-Tokens ([double]$_.totalTokens)) })
   $FSub.Text = $models -join ' · '
   $Meta.Text = ('{0} 套餐 · 更新于 {1}' -f $q.level.ToUpper(), (Get-Date -Format 'HH:mm:ss'))

@@ -529,14 +529,14 @@ final class HUDContentView: NSView {
         if let total = dto.modelUsage?.totalUsage {
             let calls = Int(total.totalModelCallCount ?? 0)
             let tk = total.totalTokensUsage ?? 0
-            footerLabel.stringValue = "📊  近 24 小时　\(Fmt.int(calls)) 次 · \(Fmt.tokens(tk)) tokens"
+            footerLabel.stringValue = "📊  当日　\(Fmt.int(calls)) 次 · \(Fmt.tokens(tk)) tokens"
             let models = (total.modelSummaryList ?? []).compactMap { m -> String? in
                 guard let name = m.modelName else { return nil }
                 return "\(name) \(Fmt.tokens(m.totalTokens ?? 0))"
             }
             footerSubLabel.stringValue = models.isEmpty ? "" : models.joined(separator: " · ")
         } else {
-            footerLabel.stringValue = "📊  近 24 小时用量暂不可用"
+            footerLabel.stringValue = "📊  当日用量暂不可用"
             footerSubLabel.stringValue = ""
         }
         hintLabel.stringValue = "\(hotkeyText) 唤出 / 收起 · 拖拽面板可移动位置"

@@ -4,8 +4,8 @@
  *
  * 数据来源与官方 glm-plan-usage 插件相同:
  *   GET {domain}/api/monitor/usage/quota/limit   —— 5 小时池 / 每周额度 / MCP 每月额度
- *   GET {domain}/api/monitor/usage/model-usage   —— 模型 token 用量(近 24 小时)
- *   GET {domain}/api/monitor/usage/tool-usage    —— MCP 工具调用(近 24 小时)
+ *   GET {domain}/api/monitor/usage/model-usage   —— 模型 token 用量(当日)
+ *   GET {domain}/api/monitor/usage/tool-usage    —— MCP 工具调用(当日)
  * domain 取自 baseURL:open.bigmodel.cn(智谱)或 api.z.ai(国际)。
  *
  * API Key 自动读取顺序:
@@ -45,7 +45,7 @@ node ~/.zcode/scripts/glm-usage.mjs
 1. **5 小时 Prompt 池**:已用百分比、重置时间(倒计时)
 2. **每周额度**:已用百分比、重置时间
 3. **MCP 工具调用(每月)**:已用/总量、剩余次数、重置时间、各工具明细
-4. **近 24 小时模型用量**:调用次数、token 消耗、按模型汇总(如有)
+4. **当日模型用量**:调用次数、token 消耗、按模型汇总(如有)
 
 如果命令执行失败,原样展示错误信息,并提示用户:API Key 存放在 ~/.zcode/v2/config.json,
 可在 ZCode 的模型设置中重新配置,或去智谱开放平台「个人编程套餐 > 用量统计」网页版查看。
@@ -320,12 +320,12 @@ async function main() {
     return;
   }
 
-  // 近 24 小时用量(失败不影响额度展示)
+  // 当日用量(失败不影响额度展示)
   const now = new Date();
   const z = (n) => String(n).padStart(2, '0');
   const fmt = (d) => `${d.getFullYear()}-${z(d.getMonth() + 1)}-${z(d.getDate())} ${z(d.getHours())}:${z(d.getMinutes())}:${z(d.getSeconds())}`;
-  const qs = `?startTime=${encodeURIComponent(fmt(new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1, now.getHours(), 0, 0)))}`
-    + `&endTime=${encodeURIComponent(fmt(new Date(now.getFullYear(), now.getMonth(), now.getDate(), now.getHours(), 59, 59)))}`;
+  const qs = `?startTime=${encodeURIComponent(fmt(new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0)))}`
+    + `&endTime=${encodeURIComponent(fmt(now))}`;
   const [modelUsage, toolUsage] = await Promise.all([
     get('/api/monitor/usage/model-usage' + qs).catch(() => null),
     get('/api/monitor/usage/tool-usage' + qs).catch(() => null),
@@ -364,7 +364,7 @@ async function main() {
   if (modelUsage?.totalUsage) {
     const t = modelUsage.totalUsage;
     console.log('');
-    console.log(` 📊  ${bold(padEndW('近 24 小时模型用量', LABEL_W))}`
+    console.log(` 📊  ${bold(padEndW('当日模型用量', LABEL_W))}`
       + `${fmtNum(t.totalModelCallCount)} 次 · ${fmtTokens(t.totalTokensUsage)} tokens`);
     const models = t.modelSummaryList || [];
     if (models.length) {
@@ -380,7 +380,7 @@ async function main() {
     if (t.totalZreadMcpCount) parts.push(`Zread ${fmtNum(t.totalZreadMcpCount)}`);
     if (parts.length) {
       console.log('');
-      console.log(` 🔌  ${bold(padEndW('近 24 小时 MCP 调用', LABEL_W))}${parts.join(' · ')}`);
+      console.log(` 🔌  ${bold(padEndW('当日 MCP 调用', LABEL_W))}${parts.join(' · ')}`);
     }
   }
 
