@@ -1,0 +1,19 @@
+# 换行符规范：仓库内文本一律存 LF，checkout 时按平台/类型还原
+# 背景：曾因全仓库 CRLF 导致 macOS 用户 bash build.sh 报
+#       "set: pipefail: invalid option name"（\r 混入选项名），无法编译悬浮窗
+*       text=auto
+
+# macOS/Linux 侧文件：工作区也强制 LF，Windows 协作者检出时不会被 autocrlf 转成 CRLF
+*.sh    text eol=lf
+*.swift text eol=lf
+*.mjs   text eol=lf
+*.md    text eol=lf
+*.json  text eol=lf
+
+# Windows 侧脚本：工作区强制 CRLF（PowerShell/VBS 对 LF 容忍但保持原样最稳）
+*.ps1   text eol=crlf
+*.vbs   text eol=crlf
+
+# 二进制资源，禁止任何换行符转换
+*.jpg   binary
+*.png   binary
