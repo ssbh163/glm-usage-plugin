@@ -50,25 +50,17 @@ open ZCodeUsageHUD.app
 什么都不用做，直接就能用。工具会自动读取 ZCode 里已登录的账号。
 
 **方式 B：不用 ZCode，只想看自己的 API Key 额度**
-先启动一次应用让它生成配置文件，然后编辑：
+启动后面板显示「⚠️ 查询失败 · 未找到 Coding Plan API Key」时，直接在面板里配：
 
-```bash
-open ~/.zcode/zcode-usage-hud/
-```
+1. 点失败页右下角的 **🔑 配置 API Key** 按钮（或菜单栏 ⚡ 图标 → 配置 API Key…）
+2. 服务商下拉二选一：智谱开放平台（bigmodel.cn）/ 智谱国际（z.ai）
+3. 粘贴你的 API Key → 点「保存并查询」（密码框里按回车同样生效）
 
-编辑里面的 `config.json`，加上两行（填你自己的 Key）：
+保存立即查询，之后每次刷新自动使用。「清除已存 Key」可删掉凭据、恢复自动探测 ZCode 配置。
 
-```json
-{
-  "apiKey": "你的智谱 API Key",
-  "apiBase": "https://open.bigmodel.cn/api/anthropic"
-}
-```
-
-保存后点面板右上角 ↻ 刷新即可。
-
-> ⚠️ `config.json` 里有你的 API Key，不要把这个文件发给别人。
-> 国际站用户 `apiBase` 填 `https://api.z.ai/api/anthropic`。
+> ⚠️ 凭据明文存放在 `~/.zcode/zcode-usage-manual.json`（Windows 悬浮窗和终端 CLI 也读这一份），不要把这个文件发给别人。
+>
+> 不想用界面也可以手工编辑 `~/.zcode/zcode-usage-hud/config.json`，加上 `"apiKey"` / `"apiBase"` 两个字段（旧方法，仍然支持；`apiBase` 国际站填 `https://api.z.ai/api/anthropic`）。
 
 ---
 
@@ -140,7 +132,7 @@ open ~/.zcode/zcode-usage-hud/
 
 | 文件 | 作用 |
 |---|---|
-| `ZCodeUsageHUD.swift` | 主程序源码（Swift + AppKit，单文件，约 700 行，零第三方依赖） |
+| `ZCodeUsageHUD.swift` | 主程序源码（Swift + AppKit，单文件，约 1200 行，零第三方依赖） |
 | `build.sh` | 一键编译打包脚本 |
 | `launch.sh` | ZCode 钩子用的幂等启动器（可选） |
 | `scripts/zcode-usage.mjs` | 用量查询脚本（来自 zcode-usage 插件，负责调接口和汇总） |

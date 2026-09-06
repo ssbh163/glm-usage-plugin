@@ -18,11 +18,11 @@ node scripts/zcode-usage.mjs
 node "$(ls -d "$HOME/.zcode/cli/plugins/cache"/*/zcode-usage/*/skills/zcode-usage/scripts/zcode-usage.mjs 2>/dev/null | sort -V | tail -1)"
 ```
 
-脚本零依赖(Node >= 18),自动按顺序读取凭据:`--key/--base` 参数 → `ANTHROPIC_AUTH_TOKEN`/`ANTHROPIC_BASE_URL` 环境变量 → ZCode 配置 `~/.zcode/v2/config.json` 中已启用的 coding-plan provider。**不要把 API Key 写进命令或文件**。
+脚本零依赖(Node >= 18),自动按顺序读取凭据:`--key/--base` 参数 → `ANTHROPIC_AUTH_TOKEN`/`ANTHROPIC_BASE_URL` 环境变量 → 手动配置文件 `~/.zcode/zcode-usage-manual.json`(悬浮窗「🔑 配置 API Key」界面写入,Windows/macOS/CLI 三端共用) → ZCode 配置 `~/.zcode/v2/config.json` 中已启用的 provider。**不要把 API Key 写进命令或文件**。
 
 ## 关键约束
 
 - **只执行一次查询**,无论成功失败,立即返回结果,不要重试
 - 成功:整理成中文表格汇报(5 小时池、每周额度、MCP 月度额度、当日用量含高峰期/非高峰期拆分),数字以脚本输出为准
-- 失败:原样展示错误;HTTP 401 时提示用户检查 `~/.zcode/v2/config.json` 中的 API Key 或前往智谱开放平台「个人编程套餐 > 用量统计」
+- 失败:原样展示错误;提示用户可在悬浮窗点「🔑 配置 API Key」手动填写;HTTP 401 时提示检查 `~/.zcode/v2/config.json` 中的 API Key 或前往智谱开放平台「个人编程套餐 > 用量统计」
 - 需要原始 JSON 时,运行同一命令并加 `--json` 参数

@@ -1126,7 +1126,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     // MARK: 行为
 
     @objc private func togglePanel() {
-        if panel.isVisible { hidePanel() } else { showPanel(); refresh() }
+        // 配置表单展开时不顺带刷新,避免结果渲染把用户正在填的 Key 冲掉(定时器有同样的 guard)
+        if panel.isVisible { hidePanel() } else { showPanel(); if !content.isSetupVisible { refresh() } }
     }
 
     @objc func showPanel() {
@@ -1140,6 +1141,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     }
 
     @objc private func refreshAction() {
+        // 同 togglePanel:配置态下点 ↻ 不刷新,表单不被冲掉;保存成功后会自动重查
+        guard !content.isSetupVisible else { return }
         refresh()
     }
 

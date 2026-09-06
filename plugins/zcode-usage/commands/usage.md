@@ -20,4 +20,4 @@ allowed-tools: Bash, Read
 
 - **只执行一次查询**,无论成功失败,立即返回结果,不要重试
 - 不要改写或猜测数字,一切以脚本输出为准
-- 失败时原样展示错误信息,并提示:API Key 存放在 `~/.zcode/v2/config.json`,可在 ZCode 模型设置中重新配置,或去智谱开放平台「个人编程套餐 > 用量统计」查看
+- 失败时原样展示错误信息,并提示:可在悬浮窗点「🔑 配置 API Key」手动填写(存 `~/.zcode/zcode-usage-manual.json`);或检查 `~/.zcode/v2/config.json` 中的 API Key;或去智谱开放平台「个人编程套餐 > 用量统计」查看
