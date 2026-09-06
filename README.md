@@ -1,4 +1,4 @@
-# ZCode Usage — 0.0.4
+# ZCode Usage — 0.0.5
 
 支持API KEY与账号登录两种方式查询 GLM Coding Plan 额度(当日高峰/非高峰拆分),悬浮窗展示:
 
@@ -196,6 +196,7 @@ node zcode-usage.mjs --uninstall
 
 ## 更新日志
 
+- **0.0.5**:修复 Windows 悬浮窗「🔑 配置 API Key」按钮点击无反应。按钮未加入窗口拖拽排除名单,点击时 MouseLeftButtonDown 先触发 DragMove,系统移动循环吞掉 MouseLeftButtonUp,打开配置表单的处理器永不执行;现与 ↻/✕ 同样放行(命中文字或内边距均有效)。
 - **0.0.4**:消除查询脚本双副本。`macos/scripts/zcode-usage.mjs` 不再手工维护,`build.sh` 编译时自动从 `skills` 正本同步(gitignore 防止生成物入库);独立分享出去的 macos 目录找不到正本时沿用现有副本。此前两份脚本已出现输出文案漂移(副本缺少「已用」前缀),今后由构建流程保证一致。
 - **0.0.3**:新增 API Key 手动配置兜底。Windows/macOS 悬浮窗查询失败时,面板内直接选服务商(bigmodel/z.ai)+ 粘贴 Key,保存立即生效;三端(Windows 悬浮窗/macOS HUD/CLI)共用 `~/.zcode/zcode-usage-manual.json`,悬浮窗配一次终端也能查。凭据自动探测加固:扫描全部已启用 provider(不再只认固定 4 个名字,自定义 provider 可识别)、兼容 `~/.zcode/config.json` 布局与 `provider`/`providers` 键、兼容 UTF-8 BOM、主动跳过无监控接口的 `zcode.z.ai`(启动版)并给出明确引导;手动凭据以环境变量传给查询脚本,不出现在命令行参数。
 - **0.0.2**:品牌更名 glm-usage → zcode-usage。

@@ -550,7 +550,12 @@ $BtnClose.Add_MouseLeftButtonUp({ $win.Hide() })
 # 拖动(避开按钮),记忆位置;配置态禁用拖拽,否则鼠标点不进下拉框和密码框
 $win.Add_MouseLeftButtonDown({
   $src = $_.OriginalSource
-  if ($src -ne $BtnRefresh -and $src -ne $BtnClose -and $SetupPanel.Visibility -ne 'Visible') { $win.DragMove(); Save-Pos }
+  if ($SetupPanel.Visibility -eq 'Visible') { return }
+  # 🔑 按钮必须排除:点按钮的 MouseLeftButtonDown 一旦触发 DragMove,
+  # 系统移动循环会吞掉随后的 MouseLeftButtonUp,按钮点击就"没反应"。
+  # 命中源可能是 Border 本体(内边距)或里面的 TextBlock(文字),两者都要放行
+  $onKey = ($src -eq $BtnKey) -or ($src.Parent -eq $BtnKey)
+  if ($src -ne $BtnRefresh -and $src -ne $BtnClose -and -not $onKey) { $win.DragMove(); Save-Pos }
 })
 $win.Add_Closing({ Save-Pos })
 
