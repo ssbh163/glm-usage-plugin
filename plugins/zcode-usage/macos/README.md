@@ -135,7 +135,7 @@ open ZCodeUsageHUD.app
 | `ZCodeUsageHUD.swift` | 主程序源码（Swift + AppKit，单文件，约 1200 行，零第三方依赖） |
 | `build.sh` | 一键编译打包脚本 |
 | `launch.sh` | ZCode 钩子用的幂等启动器（可选） |
-| `scripts/zcode-usage.mjs` | 用量查询脚本（来自 zcode-usage 插件，负责调接口和汇总） |
+| `scripts/` | 用量查询脚本，`build.sh` 编译时自动从插件 `skills` 正本同步，无需手工维护 |
 
 想改外观（尺寸、配色、显示项）直接看 `ZCodeUsageHUD.swift`，每个区块都有中文注释，
 改完重新 `bash build.sh` 即可。

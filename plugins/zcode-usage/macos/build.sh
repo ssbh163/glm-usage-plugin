@@ -6,6 +6,7 @@
 #   - 打成 .app 才能设置 LSUIElement=true（不占 Dock、不抢焦点）
 #   - 打成 .app 才能用 `open -g` 做「已运行则唤出」的幂等启动
 #   - ad-hoc 签名让应用有稳定身份，避免每次重建后系统重复询问权限
+#   - 顺带把查询脚本从 skills 正本同步到 scripts/，消除双副本手工维护的漂移风险
 #
 # 用法：bash ~/.zcode/zcode-usage-hud/build.sh
 # ============================================================================
@@ -18,6 +19,21 @@ NAME="ZCodeUsageHUD"
 echo "==> 清理旧的应用包"
 rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
+
+# 同步查询脚本：正本在 ../skills/zcode-usage/scripts/（插件 hook/CLI 用的都是它）。
+# 拷到 .app 旁边的 scripts/，让「整个 macos 目录分享给别人」的机器不装 ZCode 也能查；
+# 独立目录里找不到正本时，沿用现有副本（分享出去的场景就是这样）
+echo "==> 同步查询脚本"
+MJS_SRC="$DIR/../skills/zcode-usage/scripts/zcode-usage.mjs"
+if [ -f "$MJS_SRC" ]; then
+  mkdir -p "$DIR/scripts"
+  cp "$MJS_SRC" "$DIR/scripts/zcode-usage.mjs"
+  echo "    scripts/zcode-usage.mjs 已从 skills 正本同步"
+elif [ -f "$DIR/scripts/zcode-usage.mjs" ]; then
+  echo "    未找到 skills 正本（独立目录），沿用现有 scripts/zcode-usage.mjs"
+else
+  echo "    ⚠ 两个位置都没有查询脚本；悬浮窗将依赖 ZCode 插件缓存里的副本"
+fi
 
 echo "==> 编译 Swift 源码"
 swiftc -O -swift-version 5 \
