@@ -1,17 +1,22 @@
 // ============================================================================
 // 文件作用：GLM Coding Plan 用量悬浮窗（macOS 原生实现）
 //
-// 当前版本：v1.0
+// 当前版本：v1.1
 //   - 无边框圆角悬浮面板，始终置顶，可用鼠标任意位置拖拽
 //   - 全局快捷键（默认 Ctrl+G）随时唤出 / 收起
 //   - 菜单栏图标兜底，快捷键失效时也能操作
 //   - 窗口位置自动记忆，下次弹出保持在上次拖到的地方
+//   - v1.1 查询失败时可在面板内直接配置 API Key（服务商下拉 + 粘贴 Key），
+//     免去手工编辑 config.json 的门槛；菜单栏也常驻「配置 API Key…」入口
+//   - v1.2 手动凭据改存 ~/.zcode/zcode-usage-manual.json，与 Windows 悬浮窗及
+//     CLI 查询共用同一份；config.json 里的手填字段仍兼容，但优先级低于共享文件
 //
 // 为什么这样做：
 //   - 用 Swift + AppKit，Mac 自带 Command Line Tools 即可编译，零第三方依赖
 //   - 数据不自己请求接口，而是复用官方 zcode-usage.mjs 脚本的 --json 输出，
 //     保证显示口径和终端里 /zcode-usage:usage 完全一致，脚本升级后无需改这里
 //   - 全局快捷键走 Carbon RegisterEventHotKey，不需要「辅助功能」授权
+//   - 手动凭据通过环境变量传给脚本而不是 --key 参数，Key 不会出现在 ps 进程列表
 //
 // 支持范围：macOS 12+，Apple Silicon / Intel 均可
 //
@@ -31,6 +36,8 @@ enum HUDPaths {
     static var configPath: String { baseDir + "/config.json" }
     /// 官方查询脚本所在的插件缓存根目录
     static var pluginCacheDir: String { home + "/.zcode/cli/plugins/cache" }
+    /// 🔑 界面保存的手动凭据，与 Windows 悬浮窗、CLI 查询共用同一份
+    static var manualCredPath: String { home + "/.zcode/zcode-usage-manual.json" }
 }
 
 enum HUDMetrics {
@@ -50,7 +57,7 @@ struct HUDConfig {
     var originX: Double? = nil
     var originY: Double? = nil
     var nodePath: String? = nil
-    /// 独立使用（不依赖 ZCode 登录态）时手工填写的凭据，会以 --key/--base 传给查询脚本
+    /// 独立使用（不依赖 ZCode 登录态）时手工填写的凭据，会以环境变量传给查询脚本
     var apiKey: String? = nil
     var apiBase: String? = nil
 
@@ -80,14 +87,41 @@ struct HUDConfig {
         if let x = originX { obj["originX"] = x }
         if let y = originY { obj["originY"] = y }
         if let n = nodePath { obj["nodePath"] = n }
-        if let k = apiKey { obj["apiKey"] = k }
-        if let b = apiBase { obj["apiBase"] = b }
+        // 凭据显式写 null 而不是省略：清除 Key 时要把旧值从文件里覆盖掉，
+        // 否则 load() 会一直读到残留的旧 Key
+        obj["apiKey"] = apiKey ?? NSNull()
+        obj["apiBase"] = apiBase ?? NSNull()
         try? FileManager.default.createDirectory(atPath: HUDPaths.baseDir,
                                                  withIntermediateDirectories: true)
         if let data = try? JSONSerialization.data(withJSONObject: obj,
                                                   options: [.prettyPrinted, .sortedKeys]) {
             try? data.write(to: URL(fileURLWithPath: HUDPaths.configPath))
         }
+    }
+}
+
+// MARK: - 手动凭据（与 Windows 悬浮窗、CLI 查询共用）
+
+enum ManualCredential {
+    static func load() -> (key: String, base: String)? {
+        guard let data = FileManager.default.contents(atPath: HUDPaths.manualCredPath),
+              let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let k = obj["apiKey"] as? String, !k.isEmpty,
+              let b = obj["apiBase"] as? String, !b.isEmpty else { return nil }
+        return (k, b)
+    }
+
+    static func save(key: String, base: String) {
+        try? FileManager.default.createDirectory(atPath: HUDPaths.baseDir,
+                                                 withIntermediateDirectories: true)
+        if let data = try? JSONSerialization.data(withJSONObject: ["apiKey": key, "apiBase": base],
+                                                  options: [.prettyPrinted, .sortedKeys]) {
+            try? data.write(to: URL(fileURLWithPath: HUDPaths.manualCredPath))
+        }
+    }
+
+    static func clear() {
+        try? FileManager.default.removeItem(atPath: HUDPaths.manualCredPath)
     }
 }
 
@@ -130,7 +164,7 @@ struct ModelUsageDTO: Codable {
     let totalUsage: TotalUsageDTO?
 }
 
-/// 当日用量拆分:高峰期(工作日 14–18 时)/ 非高峰期,由 zcode-usage.mjs 计算好
+/// 当日用量拆分:高峰期(工作日 14–18 时)/ 非高峰,由 zcode-usage.mjs 计算好
 struct UsageSplitSideDTO: Codable {
     let calls: Int?
     let tokens: Double?
@@ -284,11 +318,13 @@ final class UsageFetcher {
             .first?.path
     }
 
-    /// 同步执行外部命令，带超时保护
-    private static func runSync(_ exe: String, _ args: [String], timeout: TimeInterval) -> String? {
+    /// 同步执行外部命令，带超时保护；env 非 nil 时以该环境变量集启动子进程
+    private static func runSync(_ exe: String, _ args: [String], timeout: TimeInterval,
+                                env: [String: String]? = nil) -> String? {
         let task = Process()
         task.executableURL = URL(fileURLWithPath: exe)
         task.arguments = args
+        if let env = env { task.environment = env }
         let outPipe = Pipe(), errPipe = Pipe()
         task.standardOutput = outPipe
         task.standardError = errPipe
@@ -326,17 +362,23 @@ final class UsageFetcher {
             }
             guard let node = resolveNode(preferred: config.nodePath) else {
                 DispatchQueue.main.async {
-                    completion(.failure("找不到 node，可在 config.json 里手工填写 nodePath"), nil)
+                    completion(.failure("找不到 node，可在面板里配置 API Key 或安装 Node.js"), nil)
                 }
                 return
             }
             lastStderr = ""
-            // 独立部署时把 config.json 里的凭据显式传给脚本，不依赖 ZCode 登录态
-            var args = [script, "--json"]
-            if let k = config.apiKey, let b = config.apiBase {
-                args += ["--key", k, "--base", b]
+            let args = [script, "--json"]
+            // 手动凭据优先共享文件(与 Windows 悬浮窗/CLI 共用)，其次 config.json 手填字段。
+            // 走 env 而不是 --key 参数：命令行参数对本机所有用户可见(ps)，env 不可见。
+            var env: [String: String]? = nil
+            let manual = ManualCredential.load()
+            if let k = config.apiKey ?? manual?.key, let b = config.apiBase ?? manual?.base {
+                var e = ProcessInfo.processInfo.environment
+                e["ANTHROPIC_AUTH_TOKEN"] = k
+                e["ANTHROPIC_BASE_URL"] = b
+                env = e
             }
-            guard let raw = runSync(node, args, timeout: 25) else {
+            guard let raw = runSync(node, args, timeout: 25, env: env) else {
                 let detail = lastStderr.split(separator: "\n").first.map(String.init) ?? "脚本执行失败"
                 DispatchQueue.main.async { completion(.failure(detail), node) }
                 return
@@ -462,6 +504,11 @@ final class HUDContentView: NSView {
     let offPeakValue = makeLabel(10.5, .regular, .secondaryLabelColor, align: .right)
     let footerSubLabel = makeLabel(10.5, .regular, .tertiaryLabelColor)
     let hintLabel = makeLabel(10, .regular, .quaternaryLabelColor)
+    // 查询失败时的兜底入口:点开后面板内直接选服务商 + 粘贴 API Key
+    let configKeyButton = NSButton()
+    let setupView = CredentialSetupView()
+
+    var isSetupVisible: Bool { !setupView.isHidden }
 
     override var isFlipped: Bool { true }
 
@@ -472,6 +519,13 @@ final class HUDContentView: NSView {
 
         configureIconButton(refreshButton, title: "↻", tooltip: "立即刷新")
         configureIconButton(closeButton, title: "✕", tooltip: "收起面板")
+
+        configKeyButton.title = "🔑 配置 API Key"
+        configKeyButton.bezelStyle = .rounded
+        configKeyButton.controlSize = .small
+        configKeyButton.font = .systemFont(ofSize: 11, weight: .medium)
+        configKeyButton.toolTip = "手动选择服务商并粘贴 API Key"
+        configKeyButton.isHidden = true
 
         separator.boxType = .separator
 
@@ -487,10 +541,11 @@ final class HUDContentView: NSView {
             rows.append(r)
             addSubview(r)
         }
+        setupView.isHidden = true
         [titleLabel, metaLabel, refreshButton, closeButton,
          separator, peakBannerLabel, peakBannerValue, peakBannerBar,
          footerLabel, peakLabel, peakValue, offPeakLabel, offPeakValue,
-         footerSubLabel, hintLabel].forEach { addSubview($0) }
+         footerSubLabel, hintLabel, configKeyButton, setupView].forEach { addSubview($0) }
     }
     required init?(coder: NSCoder) { fatalError() }
 
@@ -516,6 +571,14 @@ final class HUDContentView: NSView {
         y += 21
         metaLabel.frame = NSRect(x: pad, y: y, width: w, height: 14)
         y += 14 + 12
+
+        // 配置态:表单占据头部以下的全部区域,其余区块已隐藏,无需再排版
+        if !setupView.isHidden {
+            setupView.frame = NSRect(x: pad, y: y + 2, width: w,
+                                     height: CredentialSetupView.viewHeight)
+            return
+        }
+
         if !peakBannerLabel.isHidden {
             peakBannerLabel.frame = NSRect(x: pad, y: y, width: w, height: 14)
             peakBannerValue.frame = NSRect(x: pad, y: y, width: w, height: 14)
@@ -533,7 +596,15 @@ final class HUDContentView: NSView {
         y += 2
         separator.frame = NSRect(x: pad, y: y, width: w, height: 1)
         y += 11
-        footerLabel.frame = NSRect(x: pad, y: y, width: w, height: 16)
+        // 失败态下 footer 行右侧放「配置 API Key」按钮,文案行相应收窄
+        let keyBtnW: CGFloat = 126
+        footerLabel.frame = NSRect(x: pad, y: y,
+                                   width: configKeyButton.isHidden ? w : w - keyBtnW - 10,
+                                   height: 16)
+        if !configKeyButton.isHidden {
+            configKeyButton.frame = NSRect(x: bounds.width - pad - keyBtnW, y: y - 4,
+                                           width: keyBtnW, height: 22)
+        }
         y += 17
         if !peakLabel.isHidden {
             peakLabel.frame = NSRect(x: pad, y: y, width: w, height: 15)
@@ -550,6 +621,10 @@ final class HUDContentView: NSView {
 
     /// 内容高度随实际行数变化，用于自适应窗口高度
     var preferredHeight: CGFloat {
+        if !setupView.isHidden {
+            return HUDMetrics.pad - 2 + 21 + 14 + 12 + 2
+                + CredentialSetupView.viewHeight + HUDMetrics.pad
+        }
         let visibleRows = rows.filter { !$0.isHidden }.count
         // 高峰横幅隐藏时不占高度:14+1 + 4+8
         let bannerH: CGFloat = peakBannerLabel.isHidden ? 0 : 27
@@ -585,6 +660,7 @@ final class HUDContentView: NSView {
     }
 
     func render(_ dto: UsageRootDTO, hotkeyText: String) {
+        setupView.isHidden = true
         updatePeakBanner()
         let level = (dto.quota?.level ?? "").uppercased()
         let df = DateFormatter()
@@ -626,11 +702,15 @@ final class HUDContentView: NSView {
         } else {
             splitViews.forEach { $0.isHidden = true }
         }
+        separator.isHidden = false
+        configKeyButton.isHidden = true
+        hintLabel.isHidden = false
         hintLabel.stringValue = "\(hotkeyText) 唤出 / 收起 · 拖拽面板可移动位置"
         needsLayout = true
     }
 
     func renderError(_ message: String, hotkeyText: String) {
+        setupView.isHidden = true
         updatePeakBanner()
         metaLabel.stringValue = "读取失败"
         for row in rows { row.isHidden = true }
@@ -639,9 +719,12 @@ final class HUDContentView: NSView {
         rows.first?.valueLabel.stringValue = ""
         rows.first?.bar.progress = 0
         rows.first?.subLabel.stringValue = message
-        footerLabel.stringValue = "可点右上角 ↻ 重试"
+        footerLabel.stringValue = "点 ↻ 重试，或手动配置 Key"
         footerSubLabel.stringValue = ""
         [peakLabel, peakValue, offPeakLabel, offPeakValue].forEach { $0.isHidden = true }
+        separator.isHidden = false
+        configKeyButton.isHidden = false
+        hintLabel.isHidden = false
         hintLabel.stringValue = "\(hotkeyText) 唤出 / 收起 · 拖拽面板可移动位置"
         needsLayout = true
     }
@@ -649,12 +732,143 @@ final class HUDContentView: NSView {
     func renderLoading() {
         metaLabel.stringValue = "正在读取…"
     }
+
+    // MARK: 凭据配置态
+
+    /// 显示面板内配置表单（查询失败兜底 / 菜单栏主动打开共用）
+    func showSetup(apiKey: String?, apiBase: String?) {
+        for r in rows { r.isHidden = true }
+        [peakBannerLabel, peakBannerValue, peakBannerBar,
+         separator, footerLabel, peakLabel, peakValue, offPeakLabel, offPeakValue,
+         footerSubLabel, hintLabel, configKeyButton].forEach { $0.isHidden = true }
+        setupView.isHidden = false
+        setupView.prefill(apiKey: apiKey, apiBase: apiBase)
+        metaLabel.stringValue = "手动配置"
+        needsLayout = true
+    }
+
+    /// 收起配置表单。数据区各控件的可见性由随后的 render()/renderError() 全量接管
+    func hideSetup() {
+        setupView.isHidden = true
+        needsLayout = true
+    }
+}
+
+// MARK: - 凭据手动配置视图（查询失败时的兜底表单）
+
+/// 面板内直接选服务商 + 粘贴 API Key，保存进 config.json 后立即重查。
+/// 此前手动凭据只能手工编辑 ~/.zcode/zcode-usage-hud/config.json，普通用户跨不过这个门槛。
+final class CredentialSetupView: NSView {
+
+    /// 服务商下拉的可选项：文案展示给用户，base 是传给脚本的完整 baseURL
+    static let baseChoices: [(label: String, base: String)] = [
+        ("智谱开放平台（bigmodel.cn）", "https://open.bigmodel.cn/api/anthropic"),
+        ("智谱国际（z.ai）", "https://api.z.ai/api/anthropic"),
+    ]
+
+    /// 表单总高度，供 HUDContentView 排版与自适应窗口高度
+    static let viewHeight: CGFloat = 194
+
+    let titleLabel = HUDContentView.makeLabel(13, .semibold, .labelColor)
+    let reasonLabel = HUDContentView.makeLabel(10.5, .regular, .secondaryLabelColor)
+    let baseLabel = HUDContentView.makeLabel(11, .medium, .labelColor)
+    let basePopup = NSPopUpButton()
+    let keyLabel = HUDContentView.makeLabel(11, .medium, .labelColor)
+    let keyField = NSSecureTextField()
+    let saveButton = NSButton()
+    let clearButton = NSButton()
+    let hintLabel = NSTextField(labelWithString: "")
+
+    /// (apiKey, apiBase)
+    var onSave: ((String, String) -> Void)?
+    var onClear: (() -> Void)?
+
+    override var isFlipped: Bool { true }
+    /// 面板是非激活窗口，第一次点击就要能落到输入框上，不被当作「激活窗口」吞掉
+    override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
+
+    override init(frame frameRect: NSRect) {
+        super.init(frame: frameRect)
+        titleLabel.stringValue = "🔑 手动配置 API Key"
+        reasonLabel.stringValue = "未自动找到 Coding Plan 凭据，填一次即可，仅保存在本机"
+
+        baseLabel.stringValue = "服务商"
+        basePopup.addItems(withTitles: CredentialSetupView.baseChoices.map { $0.label })
+        basePopup.controlSize = .small
+        basePopup.font = .systemFont(ofSize: 11.5)
+
+        keyLabel.stringValue = "API Key"
+        keyField.placeholderString = "在此粘贴 API Key"
+        keyField.font = .systemFont(ofSize: 12)
+        keyField.setFocusRingType(.exterior)
+
+        saveButton.title = "保存并查询"
+        saveButton.bezelStyle = .rounded
+        saveButton.controlSize = .small
+        saveButton.font = .systemFont(ofSize: 11.5, weight: .semibold)
+        saveButton.keyEquivalent = "\r"   // 输入框里按回车即保存
+        saveButton.target = self
+        saveButton.action = #selector(saveAction)
+
+        clearButton.title = "清除已存 Key"
+        clearButton.bezelStyle = .rounded
+        clearButton.controlSize = .small
+        clearButton.font = .systemFont(ofSize: 11)
+        clearButton.toolTip = "删掉已保存的 Key，恢复自动探测 ZCode 配置"
+        clearButton.target = self
+        clearButton.action = #selector(clearAction)
+
+        hintLabel.stringValue = "Key 来自智谱开放平台「API Keys」页；ZCode 用户也可在 ZCode 模型设置中查看"
+        hintLabel.font = .systemFont(ofSize: 10)
+        hintLabel.textColor = .quaternaryLabelColor
+        hintLabel.lineBreakMode = .byWordWrapping
+
+        [titleLabel, reasonLabel, baseLabel, basePopup,
+         keyLabel, keyField, saveButton, clearButton, hintLabel].forEach { addSubview($0) }
+    }
+    required init?(coder: NSCoder) { fatalError() }
+
+    /// 回填：域名按已存 apiBase 预选；Key 不回显（安全），但已存时允许「清除」
+    func prefill(apiKey: String?, apiBase: String?) {
+        keyField.stringValue = ""
+        let idx = (apiBase ?? "").contains("z.ai") ? 1 : 0
+        basePopup.selectItem(at: idx)
+        clearButton.isEnabled = !(apiKey ?? "").isEmpty
+    }
+
+    override func layout() {
+        super.layout()
+        let w = bounds.width
+        titleLabel.frame  = NSRect(x: 0, y: 0,   width: w, height: 18)
+        reasonLabel.frame = NSRect(x: 0, y: 20,  width: w, height: 13)
+        baseLabel.frame   = NSRect(x: 0, y: 41,  width: w, height: 14)
+        basePopup.frame   = NSRect(x: 0, y: 56,  width: w, height: 24)
+        keyLabel.frame    = NSRect(x: 0, y: 88,  width: w, height: 14)
+        keyField.frame    = NSRect(x: 0, y: 103, width: w, height: 24)
+        saveButton.frame  = NSRect(x: 0, y: 135, width: 112, height: 24)
+        clearButton.frame = NSRect(x: 120, y: 135, width: 132, height: 24)
+        hintLabel.frame   = NSRect(x: 0, y: 167, width: w, height: 26)
+    }
+
+    @objc private func saveAction() {
+        let key = keyField.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !key.isEmpty else {
+            NSApp.beep()
+            hintLabel.stringValue = "请先粘贴 API Key 再保存"
+            return
+        }
+        onSave?(key, CredentialSetupView.baseChoices[basePopup.indexOfSelectedItem].base)
+    }
+
+    @objc private func clearAction() {
+        onClear?()
+    }
 }
 
 // MARK: - 悬浮面板
 
 final class HUDPanel: NSPanel {
-    // 无边框窗口默认不能成为 key window，这里放开以便响应 Esc
+    // 无边框窗口默认不能成为 key window，这里放开以便响应 Esc / 输入框获得焦点
     override var canBecomeKey: Bool { true }
     override var canBecomeMain: Bool { false }
 }
@@ -807,6 +1021,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         content.refreshButton.action = #selector(refreshAction)
         content.closeButton.target = self
         content.closeButton.action = #selector(hidePanel)
+        content.configKeyButton.target = self
+        content.configKeyButton.action = #selector(openCredentialSetup)
+        content.setupView.onSave = { [weak self] key, base in
+            self?.saveCredential(key: key, base: base)
+        }
+        content.setupView.onClear = { [weak self] in self?.clearCredential() }
         effect.addSubview(content)
 
         panel.contentView = effect
@@ -825,6 +1045,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         let refreshItem = NSMenuItem(title: "立即刷新", action: #selector(refreshAction), keyEquivalent: "")
         refreshItem.target = self
         menu.addItem(refreshItem)
+        let keyItem = NSMenuItem(title: "配置 API Key…", action: #selector(openCredentialSetup), keyEquivalent: "")
+        keyItem.target = self
+        menu.addItem(keyItem)
         menu.addItem(.separator())
         let cfgItem = NSMenuItem(title: "打开配置文件夹", action: #selector(openConfigDir), keyEquivalent: "")
         cfgItem.target = self
@@ -850,12 +1073,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         refreshTimer = Timer.scheduledTimer(withTimeInterval: config.refreshIntervalMinutes * 60,
                                             repeats: true) { [weak self] _ in
             guard let self = self, self.panel.isVisible else { return }
+            // 正在填 Key 时不要自动刷新，避免表单被结果渲染冲掉
+            guard !self.content.isSetupVisible else { return }
             self.refresh()
         }
         // 每分钟只重画倒计时文案与高峰横幅,不重新请求接口
         countdownTimer?.invalidate()
         countdownTimer = Timer.scheduledTimer(withTimeInterval: 60, repeats: true) { [weak self] _ in
             guard let self = self, self.panel.isVisible else { return }
+            guard !self.content.isSetupVisible else { return }
             if let d = self.lastData {
                 self.content.render(d, hotkeyText: self.hotkeyText)
             } else {
@@ -909,7 +1135,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         panel.orderFrontRegardless()   // 不抢占前台应用焦点
     }
 
-    @objc func hidePanel() {
+    @objc private func hidePanel() {
         panel.orderOut(nil)
     }
 
@@ -924,6 +1150,40 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     @objc private func quitApp() {
         NSApp.terminate(nil)
     }
+
+    // MARK: 凭据手动配置
+
+    /// 打开面板内配置表单。用户点按钮进来是明确要打字的，激活一次应用
+    /// 保证非激活面板里的输入框能拿到键盘焦点（仅此场景抢一次焦点）。
+    @objc private func openCredentialSetup() {
+        let m = ManualCredential.load()
+        content.hideSetup()
+        content.showSetup(apiKey: m?.key ?? config.apiKey, apiBase: m?.base ?? config.apiBase)
+        showPanel()
+        resizeToContent()
+        NSApp.activate(ignoringOtherApps: false)
+        panel.makeKey()
+        panel.makeFirstResponder(content.setupView.keyField)
+    }
+
+    /// 写入共享的手动凭据文件：悬浮窗、CLI 查询都会用它
+    private func saveCredential(key: String, base: String) {
+        ManualCredential.save(key: key, base: base)
+        content.hideSetup()
+        refresh()
+    }
+
+    /// 清掉手动凭据，恢复自动探测 ZCode 配置
+    private func clearCredential() {
+        ManualCredential.clear()
+        config.apiKey = nil   // 顺带清掉旧版手填字段，避免残留继续覆盖
+        config.apiBase = nil
+        config.save()
+        content.hideSetup()
+        refresh()
+    }
+
+    // MARK: 刷新
 
     private func resizeToContent() {
         let h = max(content.preferredHeight, 120)

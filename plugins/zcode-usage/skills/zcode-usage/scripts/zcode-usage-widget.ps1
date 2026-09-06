@@ -93,6 +93,7 @@ $xamlText = @'
   <Window.ContextMenu>
     <ContextMenu>
       <MenuItem x:Name="MenuRefresh" Header="立即刷新"/>
+      <MenuItem x:Name="MenuKey" Header="配置 API Key…"/>
       <Separator/>
       <MenuItem x:Name="MenuExit" Header="退出"/>
     </ContextMenu>
@@ -113,6 +114,30 @@ $xamlText = @'
       </Grid>
       <!-- meta:14 高,+12 -->
       <TextBlock x:Name="Meta" Text="正在读取…" FontSize="10.5" Foreground="{DynamicResource TertiaryBrush}" Margin="0,1,0,12"/>
+
+      <!-- 🔑 手动配置 API Key(查询失败兜底,与 macOS HUD 同布局):服务商下拉 + 粘贴 Key -->
+      <StackPanel x:Name="SetupPanel" Visibility="Collapsed">
+        <TextBlock Text="🔑 手动配置 API Key" FontSize="13" FontWeight="SemiBold" Foreground="{DynamicResource LabelBrush}"/>
+        <TextBlock Text="未自动找到 Coding Plan 凭据,填一次即可,仅保存在本机" FontSize="10.5" Foreground="{DynamicResource TertiaryBrush}" Margin="0,3,0,12"/>
+        <TextBlock Text="服务商" FontSize="11" FontWeight="Medium" Foreground="{DynamicResource LabelBrush}"/>
+        <ComboBox x:Name="SetupBase" Height="24" FontSize="11.5" Margin="0,4,0,10">
+          <ComboBoxItem Content="智谱开放平台（bigmodel.cn）" IsSelected="True"/>
+          <ComboBoxItem Content="智谱国际（z.ai）"/>
+        </ComboBox>
+        <TextBlock Text="API Key" FontSize="11" FontWeight="Medium" Foreground="{DynamicResource LabelBrush}"/>
+        <PasswordBox x:Name="SetupKey" Height="24" FontSize="12" Margin="0,4,0,12" ToolTip="粘贴 API Key 后回车,或点「保存并查询」"/>
+        <StackPanel Orientation="Horizontal">
+          <Border x:Name="BtnSaveKey" CornerRadius="6" Background="#0A84FF" Padding="14,5" Cursor="Hand" Margin="0,0,10,0">
+            <TextBlock Text="保存并查询" FontSize="11.5" FontWeight="SemiBold" Foreground="White"/>
+          </Border>
+          <Border x:Name="BtnClearKey" CornerRadius="6" Background="{DynamicResource TrackBrush}" Padding="12,5" Cursor="Hand"
+                  ToolTip="删掉已保存的 Key,恢复自动探测 ZCode 配置">
+            <TextBlock Text="清除已存 Key" FontSize="11" Foreground="{DynamicResource SecondaryBrush}"/>
+          </Border>
+        </StackPanel>
+        <TextBlock x:Name="SetupHint" Text="Key 来自智谱开放平台「API Keys」页;ZCode 用户也可在 ZCode 模型设置中查看"
+                   FontSize="10" Foreground="{DynamicResource QuaternaryBrush}" Margin="0,12,0,0" TextWrapping="Wrap"/>
+      </StackPanel>
 
       <!-- 高峰期横幅(周一至周五 14:00–18:00 常驻,结束自动收起):橙色倒计时 + 时段进度条 -->
       <StackPanel x:Name="PeakBanner" Visibility="Collapsed" Margin="0,-4,0,8">
@@ -158,9 +183,15 @@ $xamlText = @'
       </StackPanel>
 
       <!-- +2 分隔线 +11 -->
-      <Rectangle Height="1" Fill="{DynamicResource SeparatorBrush}" Margin="0,10,0,10"/>
-      <!-- footer:11.5 medium labelColor 当日总量;下接 高峰(工作日 14–18 时)/非高峰 两行明细;sub 10.5 tertiary -->
-      <TextBlock x:Name="FLabel" Text="" FontSize="11.5" FontWeight="Medium" Foreground="{DynamicResource LabelBrush}"/>
+      <Rectangle x:Name="Sep" Height="1" Fill="{DynamicResource SeparatorBrush}" Margin="0,10,0,10"/>
+      <!-- footer:11.5 medium labelColor 当日总量;失败态右侧露出「🔑 配置 API Key」按钮 -->
+      <Grid x:Name="FooterGrid">
+        <TextBlock x:Name="FLabel" Text="" FontSize="11.5" FontWeight="Medium" Foreground="{DynamicResource LabelBrush}" VerticalAlignment="Center"/>
+        <Border x:Name="BtnKey" CornerRadius="6" Background="#0A84FF" Padding="10,4" HorizontalAlignment="Right"
+                Visibility="Collapsed" Cursor="Hand" ToolTip="手动选择服务商并粘贴 API Key">
+          <TextBlock Text="🔑 配置 API Key" FontSize="11" FontWeight="Medium" Foreground="White"/>
+        </Border>
+      </Grid>
       <Grid x:Name="PeakRow" Height="15" Margin="0,5,0,0">
         <TextBlock Text="高峰期(工作日 14–18 时)" FontSize="10.5" Foreground="{DynamicResource TertiaryBrush}" VerticalAlignment="Center"/>
         <TextBlock x:Name="PeakValue" Text="" FontSize="10.5" HorizontalAlignment="Right" Foreground="{DynamicResource SecondaryBrush}" VerticalAlignment="Center"/>
@@ -192,6 +223,15 @@ $PeakBanner = & $el 'PeakBanner'
 $PeakBannerLabel = & $el 'PeakBannerLabel'
 $PeakBannerValue = & $el 'PeakBannerValue'
 $PeakBannerFill = & $el 'PeakBannerFill'
+$Sep = & $el 'Sep'
+$FooterGrid = & $el 'FooterGrid'
+$BtnKey = & $el 'BtnKey'
+$SetupPanel = & $el 'SetupPanel'
+$SetupBase = & $el 'SetupBase'
+$SetupKey = & $el 'SetupKey'
+$BtnSaveKey = & $el 'BtnSaveKey'
+$BtnClearKey = & $el 'BtnClearKey'
+$SetupHint = & $el 'SetupHint'
 $rows = @()
 for ($i = 1; $i -le 3; $i++) {
   $rows += [pscustomobject]@{
@@ -224,6 +264,28 @@ function Save-Pos {
   try {
     @{ Left = $win.Left; Top = $win.Top } | ConvertTo-Json | Set-Content -Path $posFile -Encoding ASCII
   } catch { }
+}
+
+# —— 手动凭据兜底:查询失败时在面板里选服务商 + 粘贴 Key ——
+# 与 macOS HUD 共用 ~/.zcode/zcode-usage-manual.json,zcode-usage.mjs 的 CLI 查询同样读它
+$manualFile = Join-Path $env:USERPROFILE '.zcode\zcode-usage-manual.json'
+function Read-ManualCred {
+  try {
+    if (Test-Path $manualFile) {
+      $m = Get-Content $manualFile -Raw | ConvertFrom-Json
+      if ($m.apiKey -and $m.apiBase) { return $m }
+    }
+  } catch { }
+  return $null
+}
+function Save-ManualCred([string]$key, [string]$base) {
+  try {
+    # Key/URL 都是 ASCII,用 ASCII 编码避免 PowerShell 5.1 的 UTF8 BOM
+    @{ apiKey = $key; apiBase = $base } | ConvertTo-Json | Set-Content -Path $manualFile -Encoding ASCII
+  } catch { }
+}
+function Clear-ManualCred {
+  try { if (Test-Path $manualFile) { Remove-Item $manualFile } } catch { }
 }
 
 $bc = New-Object System.Windows.Media.BrushConverter
@@ -376,18 +438,37 @@ function Update-PeakBanner {
 }
 
 function Invoke-Refresh {
+  # 从手动配置回到数据视图:恢复各区块可见性(配置态把它们全部收起了)
+  Hide-Setup
+  $Sep.Visibility = 'Visible'
+  $FooterGrid.Visibility = 'Visible'
+  $FSub.Visibility = 'Visible'; $Hint.Visibility = 'Visible'
+  $FLabel.Margin = '0,0,0,0'
+  $BtnKey.Visibility = 'Collapsed'
   $Meta.Text = '正在读取…'
+  # 手动凭据走环境变量传给本次 node 子进程(脚本的 env 来源),不写命令行参数——ps 看不到 Key
+  $mc = Read-ManualCred
+  if ($mc) {
+    $env:ANTHROPIC_AUTH_TOKEN = $mc.apiKey
+    $env:ANTHROPIC_BASE_URL = $mc.apiBase
+  }
   $raw = (& node $scriptPath --json 2>&1 | Out-String).Trim()
+  if ($mc) {
+    Remove-Item Env:\ANTHROPIC_AUTH_TOKEN -ErrorAction SilentlyContinue
+    Remove-Item Env:\ANTHROPIC_BASE_URL -ErrorAction SilentlyContinue
+  }
   $d = $null
   if ($raw) { try { $d = $raw | ConvertFrom-Json } catch { $d = $null } }
   if (-not $d -or -not $d.quota) {
-    # renderError:⚠️ 查询失败 + 消息放 sub,footer 提示重试
+    # renderError:⚠️ 查询失败 + 消息放 sub,footer 提示重试,右侧露出「🔑 配置 API Key」
     $Meta.Text = '读取失败'
-    $msg = if ($raw -match '401') { 'API Key 已失效或被更换,请在 ZCode 设置中更新' }
+    $msg = if ($raw -match '401') { 'API Key 已失效或被更换,点右下按钮更新' }
       elseif ($raw) { ($raw -split "`r?`n")[0] } else { '网络错误,点右上角 ↻ 重试' }
     Set-Row $rows[0] '⚠️  查询失败' '' 0 $msg
     foreach ($r in $rows | Select-Object -Skip 1) { $r.Panel.Visibility = 'Collapsed' }
-    $FLabel.Text = '可点右上角 ↻ 重试'
+    $FLabel.Text = '点 ↻ 重试，或手动配置 Key'
+    $FLabel.Margin = '0,0,146,0'
+    $BtnKey.Visibility = 'Visible'
     $FSub.Text = ''
     $PeakRow.Visibility = 'Collapsed'; $OffPeakRow.Visibility = 'Collapsed'
     return
@@ -422,11 +503,41 @@ function Invoke-Refresh {
   $Meta.Text = ('{0} 套餐 · 更新于 {1}' -f $q.level.ToUpper(), (Get-Date -Format 'HH:mm:ss'))
 }
 
+# —— 🔑 手动配置表单:面板内切换(收起数据区,展示 服务商下拉 + Key 输入),窗口高度自适应 ——
+function Show-Setup {
+  $Meta.Text = '手动配置'
+  $PeakBanner.Visibility = 'Collapsed'
+  foreach ($r in $rows) { $r.Panel.Visibility = 'Collapsed' }
+  $Sep.Visibility = 'Collapsed'
+  $FooterGrid.Visibility = 'Collapsed'
+  $PeakRow.Visibility = 'Collapsed'; $OffPeakRow.Visibility = 'Collapsed'
+  $FSub.Visibility = 'Collapsed'; $Hint.Visibility = 'Collapsed'
+  $BtnKey.Visibility = 'Collapsed'
+  # 回填:域名按已存 apiBase 预选;Key 不回显(安全),已存时才可清除
+  $mc = Read-ManualCred
+  $SetupBase.SelectedIndex = if ($mc -and $mc.apiBase -like '*z.ai*') { 1 } else { 0 }
+  $SetupKey.Password = ''
+  $BtnClearKey.IsEnabled = [bool]$mc
+  $BtnClearKey.Opacity = if ($mc) { 1.0 } else { 0.4 }
+  $SetupHint.Text = 'Key 来自智谱开放平台「API Keys」页;ZCode 用户也可在 ZCode 模型设置中查看'
+  $SetupPanel.Visibility = 'Visible'
+}
+function Hide-Setup { $SetupPanel.Visibility = 'Collapsed' }
+
+function Save-Setup {
+  $key = $SetupKey.Password.Trim()
+  if (-not $key) { $SetupHint.Text = '请先粘贴 API Key 再保存'; return }
+  $base = if ($SetupBase.SelectedIndex -eq 1) { 'https://api.z.ai/api/anthropic' } else { 'https://open.bigmodel.cn/api/anthropic' }
+  Save-ManualCred $key $base
+  Hide-Setup
+  Invoke-Refresh
+}
+
 # 自动刷新间隔(分钟),按需调整
 $refreshMinutes = 10
 $timer = New-Object System.Windows.Threading.DispatcherTimer
 $timer.Interval = [TimeSpan]::FromMinutes($refreshMinutes)
-$timer.Add_Tick({ Invoke-Refresh })
+$timer.Add_Tick({ if ($SetupPanel.Visibility -ne 'Visible') { Invoke-Refresh } })
 
 # ↻ 刷新,✕ 收起(隐藏不退出);悬停变亮
 $BtnRefresh.Add_MouseEnter({ $BtnRefresh.Foreground = Brush $script:theme.Label })
@@ -436,10 +547,10 @@ $BtnClose.Add_MouseEnter({ $BtnClose.Foreground = Brush '#FF5A5A' })
 $BtnClose.Add_MouseLeave({ $BtnClose.Foreground = Brush $script:theme.Secondary })
 $BtnClose.Add_MouseLeftButtonUp({ $win.Hide() })
 
-# 拖动(避开按钮),记忆位置
+# 拖动(避开按钮),记忆位置;配置态禁用拖拽,否则鼠标点不进下拉框和密码框
 $win.Add_MouseLeftButtonDown({
   $src = $_.OriginalSource
-  if ($src -ne $BtnRefresh -and $src -ne $BtnClose) { $win.DragMove(); Save-Pos }
+  if ($src -ne $BtnRefresh -and $src -ne $BtnClose -and $SetupPanel.Visibility -ne 'Visible') { $win.DragMove(); Save-Pos }
 })
 $win.Add_Closing({ Save-Pos })
 
@@ -530,6 +641,21 @@ foreach ($mi in $win.ContextMenu.Items) {
   if ($mi -is [System.Windows.Controls.MenuItem]) { $menuItems[$mi.Header] = $mi }
 }
 $menuItems['立即刷新'].Add_Click({ Invoke-Refresh })
+$menuItems['配置 API Key…'].Add_Click({ Show-Setup })
+
+# 🔑 按钮与配置表单:悬停变亮、点击打开/保存/清除;密码框里回车 = 保存
+$BtnKey.Add_MouseEnter({ $BtnKey.Background = Brush '#3D9BFF' })
+$BtnKey.Add_MouseLeave({ $BtnKey.Background = Brush '#0A84FF' })
+$BtnKey.Add_MouseLeftButtonUp({ Show-Setup })
+$BtnSaveKey.Add_MouseEnter({ $BtnSaveKey.Background = Brush '#3D9BFF' })
+$BtnSaveKey.Add_MouseLeave({ $BtnSaveKey.Background = Brush '#0A84FF' })
+$BtnSaveKey.Add_MouseLeftButtonUp({ Save-Setup })
+$BtnClearKey.Add_MouseLeftButtonUp({
+  Clear-ManualCred
+  Hide-Setup
+  Invoke-Refresh
+})
+$SetupKey.Add_KeyDown({ if ($_.Key -eq 'Return') { Save-Setup } })
 $menuItems['退出'].Add_Click({
   try { if ($script:helper) { [GLMNative.Hotkey]::UnregisterHotKey($script:helper.Handle, 0xB001) | Out-Null } } catch { }
   $timer.Stop(); $win.Close(); [Environment]::Exit(0)

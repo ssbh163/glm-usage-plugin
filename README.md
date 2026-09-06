@@ -1,4 +1,4 @@
-# ZCode Usage — 0.0.2
+# ZCode Usage — 0.0.3
 
 支持API KEY与账号登录两种方式查询 GLM Coding Plan 额度(当日高峰/非高峰拆分),悬浮窗展示:
 
@@ -23,7 +23,7 @@
 ## 前提条件
 
 - [ZCode](https://zcode.z.ai) 桌面版
-- 已在 ZCode 中配置智谱 Coding Plan 的 **API Key**或**账号**登录(设置 → 模型,插件自动读取,无需手动填)
+- 已在 ZCode 中配置智谱 Coding Plan 的 **API Key**或**账号**登录(设置 → 模型,插件自动读取,无需手动填;没配也不影响安装,见下方[兜底配置](#查询失败-api-key-手动配置兜底))
 - Node.js ≥ 18(终端输入 `node -v` 检查)
 
 ## 安装
@@ -111,6 +111,28 @@ node "$(ls -d "$HOME/.zcode/cli/plugins/cache"/*/zcode-usage/*/skills/zcode-usag
 
 插件自带的 SessionStart hook 会在每个新对话开头注入一行额度摘要,无需任何配置。卸载插件即停止注入。
 
+## 查询失败?API Key 手动配置兜底
+
+自动探测不到凭据、悬浮窗显示「⚠️ 查询失败」时(常见于:只在开放平台单独办了套餐、用的是启动版/自定义 provider、或 ZCode 配置被移动),**不用翻配置文件**——Windows 和 macOS 悬浮窗都内置了一键兜底。点失败页右下角的 **🔑 配置 API Key** 按钮(macOS 也可从菜单栏 ⚡ 图标进入,Windows 也可从右键菜单进入),面板内直接选服务商、粘贴 Key,保存立即查询:
+
+<img src="assets/key-setup-flow.png" alt="API Key 手动配置流程:① 查询失败 → ② 面板内配置(服务商下拉+粘贴 Key) → ③ 保存成功" width="900" />
+
+- **服务商下拉二选一**:智谱开放平台(`open.bigmodel.cn`)/ 智谱国际(`api.z.ai`)
+- **只存本机**:`~/.zcode/zcode-usage-manual.json`。Windows 悬浮窗、macOS HUD、终端 CLI 三端共用这一份——悬浮窗里配一次,对话内 `/usage` 和终端 `node ~/.zcode/scripts/zcode-usage.mjs` 也能直接用
+- **安全**:Key 输入框不回显;传给查询脚本走环境变量而非命令行参数,`ps` 进程列表里看不到
+- **可反悔**:「清除已存 Key」删掉手动凭据,恢复自动探测 ZCode 配置
+
+### 自动探测链路(找不到 Key 时按这个顺序排查)
+
+脚本按以下顺序自动找 Key,靠前的优先:
+
+1. `--key` / `--base` 运行参数
+2. 环境变量 `ANTHROPIC_AUTH_TOKEN` + `ANTHROPIC_BASE_URL`(只设了 `ZAI_API_KEY` 时默认国际站域名)
+3. 手动配置文件 `~/.zcode/zcode-usage-manual.json`(上面的 🔑 界面写入)
+4. ZCode 配置 `~/.zcode/v2/config.json`(兼容 `~/.zcode/config.json`):扫描**全部**已启用 provider(自定义 provider 也能识别,凭据字段兼容 `options.apiKey` 与顶层 `apiKey` 两种写法),按 编程套餐 > 通用 排序;仅接受 `open.bigmodel.cn` / `api.z.ai` 两个官方域名
+
+> **启动版套餐(Start Plan)用户**:启动版使用的 `zcode.z.ai` 域名没有用量监控接口,自动探测会**主动跳过**它——避免拿它的凭据查出莫名其妙的 404。悬浮窗显示「未找到 Key」属于预期行为,点 🔑 手动配置即可。
+
 ## 隐私与安全
 
 - 插件**不含任何密钥**。脚本运行时从本机 ZCode 配置(`~/.zcode/v2/config.json`)读取你自己的 API Key
@@ -120,7 +142,7 @@ node "$(ls -d "$HOME/.zcode/cli/plugins/cache"/*/zcode-usage/*/skills/zcode-usag
 ## 常见问题
 
 **Q:提示"未找到 Coding Plan API Key"?**
-先在 ZCode 设置里配好智谱 Coding Plan 的 API Key;或设置环境变量 `ANTHROPIC_AUTH_TOKEN` + `ANTHROPIC_BASE_URL`,或运行时传 `--key <apiKey> --base <baseURL>`。
+最省事:点悬浮窗失败页的 **🔑 配置 API Key** 手动填写(见[兜底配置](#查询失败-api-key-手动配置兜底),三端共用);或先在 ZCode 设置里配好智谱 Coding Plan 的 API Key;或设置环境变量 `ANTHROPIC_AUTH_TOKEN` + `ANTHROPIC_BASE_URL`,或运行时传 `--key <apiKey> --base <baseURL>`。
 
 **Q:HTTP 401?**
 API Key 无效或过期,去智谱开放平台重新获取。
@@ -174,6 +196,8 @@ node zcode-usage.mjs --uninstall
 
 ## 更新日志
 
+- **0.0.3**:新增 API Key 手动配置兜底。Windows/macOS 悬浮窗查询失败时,面板内直接选服务商(bigmodel/z.ai)+ 粘贴 Key,保存立即生效;三端(Windows 悬浮窗/macOS HUD/CLI)共用 `~/.zcode/zcode-usage-manual.json`,悬浮窗配一次终端也能查。凭据自动探测加固:扫描全部已启用 provider(不再只认固定 4 个名字,自定义 provider 可识别)、兼容 `~/.zcode/config.json` 布局与 `provider`/`providers` 键、兼容 UTF-8 BOM、主动跳过无监控接口的 `zcode.z.ai`(启动版)并给出明确引导;手动凭据以环境变量传给查询脚本,不出现在命令行参数。
+- **0.0.2**:品牌更名 glm-usage → zcode-usage。
 - **0.0.1**:悬浮窗唤回机制重做。单实例互斥量、命名事件与唤醒文件改为在 Add-Type/XAML 等耗时初始化之前建立;新会话通过唤醒文件毫秒级唤回,手动再次运行脚本走命名事件并带重试;hook 拉起的重复实例约 300ms 静默退出。修复新会话唤回不稳定(启动竞态丢信号)的问题。Windows 悬浮窗配色改为与 ZCode 外观主题保持一致(探测 ZCode 主窗口实际配色,深浅同步,`GLM_WIDGET_THEME` 可强制),不读写 Windows 主题设置。
 - 更早版本见提交历史。
 

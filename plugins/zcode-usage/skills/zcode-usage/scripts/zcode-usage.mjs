@@ -8,10 +8,16 @@
  *   GET {domain}/api/monitor/usage/tool-usage    —— MCP 工具调用(当日)
  * domain 取自 baseURL:open.bigmodel.cn(智谱)或 api.z.ai(国际)。
  *
- * API Key 自动读取顺序:
- *   1. 环境变量 ANTHROPIC_AUTH_TOKEN + ANTHROPIC_BASE_URL
- *   2. ZCode 配置 ~/.zcode/v2/config.json 中已启用的 coding-plan provider
- * 也可用 --key <apiKey> --base <baseURL> 显式指定。
+ * API Key 自动读取顺序(靠前的优先):
+ *   1. --key/--base 运行参数
+ *   2. 环境变量 ANTHROPIC_AUTH_TOKEN + ANTHROPIC_BASE_URL
+ *   3. 手动配置文件 ~/.zcode/zcode-usage-manual.json
+ *      (macOS HUD / Windows 悬浮窗的「🔑 配置 API Key」界面写入,CLI 查询同样生效)
+ *   4. ZCode 配置 ~/.zcode/v2/config.json(兼容 ~/.zcode/config.json):
+ *      扫描全部已启用 provider(不再只认固定 4 个名字,自定义 provider 也能识别),
+ *      但只接受 open.bigmodel.cn / api.z.ai 两个域名——zcode.z.ai(启动版套餐)没有
+ *      /api/monitor 监控接口,拿它的凭据查询必然 404,宁可报「未找到 Key」
+ *      引导用户走悬浮窗的 🔑 手动配置
  */
 import fs from 'node:fs';
 import os from 'node:os';
@@ -156,36 +162,70 @@ function fromArgs() {
 }
 function fromEnv() {
   const token = process.env.ANTHROPIC_AUTH_TOKEN || process.env.ZAI_API_KEY || '';
-  const base = process.env.ANTHROPIC_BASE_URL || '';
+  // ZAI_API_KEY 单独出现时默认国际站;ANTHROPIC_AUTH_TOKEN 可能指向任意代理,没 base 不瞎猜
+  const base = process.env.ANTHROPIC_BASE_URL
+    || (!process.env.ANTHROPIC_AUTH_TOKEN && process.env.ZAI_API_KEY
+      ? 'https://api.z.ai/api/anthropic' : '');
   return token && base ? { token, base, from: 'env' } : null;
 }
-function fromZcodeConfig() {
-  const file = path.join(os.homedir(), '.zcode', 'v2', 'config.json');
-  if (!fs.existsSync(file)) return null;
+/// 读 JSON 文件;容忍 Windows 编辑器常加的 UTF-8 BOM,读不了返回 null
+function readJson(file) {
   try {
-    const cfg = JSON.parse(fs.readFileSync(file, 'utf8'));
-    const providers = cfg.provider || {};
-    const order = [
-      'builtin:bigmodel-coding-plan', 'builtin:zai-coding-plan',
-      'builtin:bigmodel', 'builtin:zai',
-    ];
-    for (const name of order) {
-      const pv = providers[name];
-      const key = pv?.options?.apiKey, base = pv?.options?.baseURL;
-      if (pv?.enabled !== false && key && base) {
-        return { token: key, base, from: `zcode:${name}` };
-      }
+    return JSON.parse(fs.readFileSync(file, 'utf8').replace(/^\uFEFF/, ''));
+  } catch { return null; }
+}
+/// 手动配置文件:悬浮窗「🔑 配置 API Key」界面写入,CLI 查询同样生效
+function fromManualFile() {
+  const obj = readJson(path.join(os.homedir(), '.zcode', 'zcode-usage-manual.json'));
+  const key = typeof obj?.apiKey === 'string' ? obj.apiKey.trim() : '';
+  const base = typeof obj?.apiBase === 'string' ? obj.apiBase.trim() : '';
+  return key && base ? { token: key, base, from: 'manual' } : null;
+}
+function fromZcodeConfig() {
+  const files = [
+    path.join(os.homedir(), '.zcode', 'v2', 'config.json'), // 当前 ZCode
+    path.join(os.homedir(), '.zcode', 'config.json'),       // 兼容其他版本的布局
+  ];
+  // 监控接口只存在于两个官方域名;zcode.z.ai(启动版套餐)没有 /api/monitor,
+  // 拿它的凭据去查必然 404,直接跳过,让报错引导用户走「🔑 手动配置」
+  const monitorHosts = ['open.bigmodel.cn', 'api.z.ai'];
+  // 同域名内按 编程套餐 > 通用 优先;列表外的自定义 provider 排最后兜底
+  const prefer = [
+    'builtin:bigmodel-coding-plan', 'builtin:zai-coding-plan',
+    'builtin:bigmodel', 'builtin:zai',
+  ];
+  for (const file of files) {
+    if (!fs.existsSync(file)) continue;
+    const cfg = readJson(file);
+    const providers = cfg?.provider || cfg?.providers;
+    if (!providers || typeof providers !== 'object') continue;
+    // 扫描全部 provider;凭据字段兼容 options.apiKey/baseURL 与顶层 apiKey/base 两种写法
+    const found = [];
+    for (const [name, pv] of Object.entries(providers)) {
+      const key = pv?.options?.apiKey ?? pv?.options?.api_key ?? pv?.apiKey;
+      const base = pv?.options?.baseURL ?? pv?.options?.base_url ?? pv?.baseURL ?? pv?.base;
+      if (pv?.enabled === false || !key || !base) continue;
+      let host;
+      try { host = new URL(base).host; } catch { continue; }
+      if (!monitorHosts.includes(host)) continue;
+      const rank = prefer.indexOf(name);
+      found.push({ name, token: key, base, rank: rank < 0 ? 9 : rank });
     }
-  } catch { /* 配置损坏时走报错分支 */ }
+    found.sort((a, b) => a.rank - b.rank); // sort 稳定,同分保持配置文件里的先后
+    if (found.length) {
+      return { token: found[0].token, base: found[0].base, from: `zcode:${found[0].name}` };
+    }
+  }
   return null;
 }
 
-const cred = fromArgs() || fromEnv() || fromZcodeConfig();
+const cred = fromArgs() || fromEnv() || fromManualFile() || fromZcodeConfig();
 if (!cred) {
   console.error('未找到 Coding Plan API Key。请任选其一:');
   console.error('  1. 在 ZCode 中配置 Coding Plan API Key(~/.zcode/v2/config.json)');
-  console.error('  2. 设置环境变量 ANTHROPIC_AUTH_TOKEN 和 ANTHROPIC_BASE_URL');
-  console.error('  3. 运行时传参: --key <apiKey> --base https://open.bigmodel.cn/api/anthropic');
+  console.error('  2. 悬浮窗里点「🔑 配置 API Key」填写(推荐,保存到 ~/.zcode/zcode-usage-manual.json,CLI 查询同样生效)');
+  console.error('  3. 设置环境变量 ANTHROPIC_AUTH_TOKEN 和 ANTHROPIC_BASE_URL');
+  console.error('  4. 运行时传参: --key <apiKey> --base https://open.bigmodel.cn/api/anthropic');
   process.exit(1);
 }
 
@@ -428,7 +468,7 @@ main().catch((e) => {
   console.error('查询失败:', e.message);
   if (String(e.message).includes('HTTP 401')) {
     console.error('该 API Key 可能:1) 已失效或被更换;2) 不是 Coding Plan 专用 Key(普通按量付费 Key 无法查询套餐额度)。');
-    console.error('请在 ZCode 的模型设置中检查 Key,或到智谱开放平台「个人编程套餐」重新获取。');
+    console.error('请在 ZCode 的模型设置中检查 Key,或在悬浮窗「🔑 配置 API Key」里更新,或到智谱开放平台「个人编程套餐」重新获取。');
   }
   process.exit(1);
 });
