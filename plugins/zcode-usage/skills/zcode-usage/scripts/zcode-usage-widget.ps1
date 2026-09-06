@@ -1,28 +1,28 @@
 ﻿# GLM Coding Plan 桌面悬浮窗(Windows PowerShell 5.1+,零依赖)
-# UI 逐项照抄 macOS GLMUsageHUD 规格:372 宽 / 18 内边距 / 16 圆角 / 6px 胶囊进度条 / macOS 标签色阶梯
-# 配色与 ZCode 外观主题保持一致(探测 ZCode 窗口实际配色,深浅同步);GLM_WIDGET_THEME=light|dark 可强制
-# 高峰期提醒横幅(周一至周五 14:00–18:00 常驻);调试:GLM_WIDGET_PEAK=on 强制显示,GLM_WIDGET_PEAK_SHIFT=<小时数> 平移模拟时钟
+# UI 逐项照抄 macOS ZCodeUsageHUD 规格:372 宽 / 18 内边距 / 16 圆角 / 6px 胶囊进度条 / macOS 标签色阶梯
+# 配色与 ZCode 外观主题保持一致(探测 ZCode 窗口实际配色,深浅同步);ZCODE_WIDGET_THEME=light|dark 可强制
+# 高峰期提醒横幅(周一至周五 14:00–18:00 常驻);调试:ZCODE_WIDGET_PEAK=on 强制显示,ZCODE_WIDGET_PEAK_SHIFT=<小时数> 平移模拟时钟
 # 生命周期与插件绑定:由插件 SessionStart hook 拉起,插件卸载(本脚本被删)后自动退出
 $ErrorActionPreference = 'SilentlyContinue'
 [Console]::OutputEncoding = [Text.Encoding]::UTF8
 
 # 单实例保护 + 唤醒通道:必须放在 Add-Type/XAML 等耗时初始化之前,
 # 否则主实例启动头几秒内到达的唤醒信号(事件尚未创建/轮询尚未开始)会被静默丢弃
-$mutex = New-Object System.Threading.Mutex($false, 'Global\GLM-Usage-Widget')
+$mutex = New-Object System.Threading.Mutex($false, 'Global\ZCode-Usage-Widget')
 $ownsMutex = $false
 try { $ownsMutex = $mutex.WaitOne(0) } catch { $ownsMutex = $true }
 if (-not $ownsMutex) {
   if ($args -notcontains 'NoShowIfExists') {
     # 手动再次启动:唤醒已有窗口(事件由主实例拿到互斥量后立即创建,无需重试)
-    try { [System.Threading.EventWaitHandle]::OpenExisting('Global\GLM-Usage-Widget-Show').Set() | Out-Null } catch { }
+    try { [System.Threading.EventWaitHandle]::OpenExisting('Global\ZCode-Usage-Widget-Show').Set() | Out-Null } catch { }
   }
   exit
 }
 # 主实例:立即创建唤醒事件(initialState=false,不会误触发)
-$showEvt = New-Object System.Threading.EventWaitHandle($false, [System.Threading.EventResetMode]::AutoReset, 'Global\GLM-Usage-Widget-Show')
+$showEvt = New-Object System.Threading.EventWaitHandle($false, [System.Threading.EventResetMode]::AutoReset, 'Global\ZCode-Usage-Widget-Show')
 
 # 唤醒文件:SessionStart hook(新会话)touch 一次,运行中的实例轮询到 mtime 变化即唤回
-$wakeFile = Join-Path $env:USERPROFILE '.zcode\scripts\glm-usage-widget.wake'
+$wakeFile = Join-Path $env:USERPROFILE '.zcode\scripts\zcode-usage-widget.wake'
 $script:lastWake = if (Test-Path $wakeFile) { (Get-Item $wakeFile).LastWriteTimeUtc } else { [datetime]::MinValue }
 
 Add-Type -AssemblyName PresentationFramework, PresentationCore, WindowsBase
@@ -61,21 +61,21 @@ Add-Type -Namespace GLMNative -Name ZCodeProbe -MemberDefinition @'
 [StructLayout(LayoutKind.Sequential)] public struct RECT { public int Left, Top, Right, Bottom; }
 '@
 
-$scriptPath = Join-Path $env:USERPROFILE '.zcode\scripts\glm-usage.mjs'
+$scriptPath = Join-Path $env:USERPROFILE '.zcode\scripts\zcode-usage.mjs'
 if (-not (Test-Path $scriptPath)) {
-  $cached = Get-ChildItem "$env:USERPROFILE\.zcode\cli\plugins\cache\*\glm-usage\*\skills\glm-usage\scripts\glm-usage.mjs" |
+  $cached = Get-ChildItem "$env:USERPROFILE\.zcode\cli\plugins\cache\*\zcode-usage\*\skills\zcode-usage\scripts\zcode-usage.mjs" |
     Sort-Object FullName -Descending | Select-Object -First 1
   if ($cached) { $scriptPath = $cached.FullName }
 }
 
-# —— 以下 XAML 与 GLMUsageHUD.swift 的 HUDMetrics/HUDContentView 布局一一对应 ——
+# —— 以下 XAML 与 ZCodeUsageHUD.swift 的 HUDMetrics/HUDContentView 布局一一对应 ——
 # 面板 372 宽(高自适应,官方公式约 306;底部当日 高峰/非高峰 明细两行后约 330);pad 18;圆角 16;边框白 10%
 # 字号阶梯:标题 14 bold / meta 10.5 / 行标题 12.5 semibold / 行数值 12 / sub 10.5 / footer 11.5 / hint 10
 # 颜色(macOS 暗色标签阶梯):labelColor 白 / secondary 白65% / tertiary 白50% / quaternary 白30%
 $xamlText = @'
 <Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="GLM Usage" Topmost="True" WindowStyle="None" AllowsTransparency="True"
+        Title="ZCode Usage" Topmost="True" WindowStyle="None" AllowsTransparency="True"
         Background="Transparent" ShowInTaskbar="False" ResizeMode="NoResize" ShowActivated="False"
         Width="372" SizeToContent="Height">
   <Window.Resources>
@@ -205,7 +205,7 @@ for ($i = 1; $i -le 3; $i++) {
 $trackWidth = 336.0
 
 # 初始位置:主屏右上角;有保存位置且在屏幕范围内则恢复
-$posFile = Join-Path $env:USERPROFILE '.zcode\scripts\glm-usage-widget.pos.json'
+$posFile = Join-Path $env:USERPROFILE '.zcode\scripts\zcode-usage-widget.pos.json'
 $wa = [System.Windows.SystemParameters]::WorkArea
 $win.Left = $wa.Right - $win.Width - 26
 $win.Top  = $wa.Top + 16
@@ -231,8 +231,8 @@ function Brush($hex) { $script:bc.ConvertFromString($hex) }
 
 # —— 主题:与 ZCode 外观保持一致(像素探测 ZCode 主窗口侧边栏),不读写任何 Windows 主题设置 ——
 # 探测失败(窗口最小化/截取失败)沿用最近一次结果;从未成功过才回退 Windows 应用模式(只读)
-# 浅色 = macOS 浅色标签阶梯(#3C3C43 系);GLM_WIDGET_THEME=light|dark 强制指定(调试用)
-$themeOverride = $env:GLM_WIDGET_THEME
+# 浅色 = macOS 浅色标签阶梯(#3C3C43 系);ZCODE_WIDGET_THEME=light|dark 强制指定(调试用)
+$themeOverride = $env:ZCODE_WIDGET_THEME
 $themes = @{
   dark = @{ Label='#FFFFFF'; Secondary='#A6FFFFFF'; Value='#8CFFFFFF'; Tertiary='#80FFFFFF'
             Quaternary='#24FFFFFF'; Track='#24FFFFFF'; Separator='#2EFFFFFF'; Border='#1AFFFFFF'
@@ -339,23 +339,23 @@ function Format-Tokens([double]$v) {
 }
 
 # —— 高峰期提醒:周一至周五 14:00–18:00 期间橙色横幅常驻,结束自动收起 ——
-# 调试:GLM_WIDGET_PEAK=on 无视日期强制显示;GLM_WIDGET_PEAK_SHIFT=<小时,可带小数> 把时钟整体平移(演示用)
+# 调试:ZCODE_WIDGET_PEAK=on 无视日期强制显示;ZCODE_WIDGET_PEAK_SHIFT=<小时,可带小数> 把时钟整体平移(演示用)
 # 刷新挂在 zcodeTimer(2s)上,状态切换和倒计时都不需要新增定时器
 function Get-PeakNow {
   $now = Get-Date
-  if ($env:GLM_WIDGET_PEAK_SHIFT) {
+  if ($env:ZCODE_WIDGET_PEAK_SHIFT) {
     $h = 0.0
-    if ([double]::TryParse($env:GLM_WIDGET_PEAK_SHIFT, [Globalization.NumberStyles]::Float, $null, [ref]$h)) { $now = $now.AddHours($h) }
+    if ([double]::TryParse($env:ZCODE_WIDGET_PEAK_SHIFT, [Globalization.NumberStyles]::Float, $null, [ref]$h)) { $now = $now.AddHours($h) }
   }
   return $now
 }
 function Get-PeakWindow {
   $now = Get-PeakNow
   $dow = [int]$now.DayOfWeek
-  if ($env:GLM_WIDGET_PEAK -ne 'on' -and ($dow -eq 0 -or $dow -eq 6)) { return $null }
+  if ($env:ZCODE_WIDGET_PEAK -ne 'on' -and ($dow -eq 0 -or $dow -eq 6)) { return $null }
   $start = $now.Date.AddHours(14)
   $end = $start.AddHours(4)
-  if ($env:GLM_WIDGET_PEAK -eq 'on' -or ($now -ge $start -and $now -lt $end)) {
+  if ($env:ZCODE_WIDGET_PEAK -eq 'on' -or ($now -ge $start -and $now -lt $end)) {
     return @{ Start = $start; End = $end }
   }
   return $null

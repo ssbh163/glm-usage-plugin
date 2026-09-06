@@ -13,7 +13,7 @@
 # ============================================================================
 
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-APP="$DIR/GLMUsageHUD.app"
+APP="$DIR/ZCodeUsageHUD.app"
 
 [ -d "$APP" ] || exit 0
 

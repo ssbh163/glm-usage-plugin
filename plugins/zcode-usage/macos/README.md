@@ -10,8 +10,8 @@
 - 数据每 5 分钟自动刷新一次（可改），也可点面板右上角 ↻ 手动刷新
 - 不占 Dock、不抢焦点，纯粹的悬浮小组件
 
-数据来源：调用智谱开放平台的用量查询接口（`scripts/glm-usage.mjs` 负责请求和汇总），
-显示口径和 ZCode 里的 glm-usage 插件完全一致。
+数据来源：调用智谱开放平台的用量查询接口（`scripts/zcode-usage.mjs` 负责请求和汇总），
+显示口径和 ZCode 里的 zcode-usage 插件完全一致。
 
 ---
 
@@ -34,12 +34,12 @@ cd ~/Desktop/GLM用量悬浮窗     # 换成你实际放的路径
 bash build.sh
 ```
 
-成功后当前文件夹里会多出一个 `GLMUsageHUD.app`，这就是应用本体。
+成功后当前文件夹里会多出一个 `ZCodeUsageHUD.app`，这就是应用本体。
 
 ### 第 2 步：启动
 
 ```bash
-open GLMUsageHUD.app
+open ZCodeUsageHUD.app
 ```
 
 面板会自动弹出在屏幕右上角。第一次启动会请求网络访问（查询用量接口），允许即可。
@@ -53,7 +53,7 @@ open GLMUsageHUD.app
 先启动一次应用让它生成配置文件，然后编辑：
 
 ```bash
-open ~/.zcode/glm-usage-hud/
+open ~/.zcode/zcode-usage-hud/
 ```
 
 编辑里面的 `config.json`，加上两行（填你自己的 Key）：
@@ -97,7 +97,7 @@ open ~/.zcode/glm-usage-hud/
 
 ## 三、可选配置
 
-配置文件：`~/.zcode/glm-usage-hud/config.json`（改完退出应用重开生效）
+配置文件：`~/.zcode/zcode-usage-hud/config.json`（改完退出应用重开生效）
 
 | 字段 | 默认值 | 说明 |
 |---|---|---|
@@ -107,7 +107,7 @@ open ~/.zcode/glm-usage-hud/
 
 ### 让它开机自启（可选）
 
-系统设置 → 通用 → 登录项与扩展 → 添加「GLMUsageHUD.app」即可。
+系统设置 → 通用 → 登录项与扩展 → 添加「ZCodeUsageHUD.app」即可。
 
 ### 让 ZCode 启动时自动弹出（可选）
 
@@ -118,8 +118,8 @@ open ~/.zcode/glm-usage-hud/
 
 ## 四、常见问题
 
-**Q：提示「找不到 glm-usage.mjs」？**
-`scripts/glm-usage.mjs` 必须和 `GLMUsageHUD.app` 放在同一个文件夹里
+**Q：提示「找不到 zcode-usage.mjs」？**
+`scripts/zcode-usage.mjs` 必须和 `ZCodeUsageHUD.app` 放在同一个文件夹里
 （本来的目录结构就是这样，别单独把 .app 拖走就行）。
 
 **Q：提示「找不到 node」？**
@@ -140,10 +140,10 @@ open ~/.zcode/glm-usage-hud/
 
 | 文件 | 作用 |
 |---|---|
-| `GLMUsageHUD.swift` | 主程序源码（Swift + AppKit，单文件，约 700 行，零第三方依赖） |
+| `ZCodeUsageHUD.swift` | 主程序源码（Swift + AppKit，单文件，约 700 行，零第三方依赖） |
 | `build.sh` | 一键编译打包脚本 |
 | `launch.sh` | ZCode 钩子用的幂等启动器（可选） |
-| `scripts/glm-usage.mjs` | 用量查询脚本（来自 glm-usage 插件，负责调接口和汇总） |
+| `scripts/zcode-usage.mjs` | 用量查询脚本（来自 zcode-usage 插件，负责调接口和汇总） |
 
-想改外观（尺寸、配色、显示项）直接看 `GLMUsageHUD.swift`，每个区块都有中文注释，
+想改外观（尺寸、配色、显示项）直接看 `ZCodeUsageHUD.swift`，每个区块都有中文注释，
 改完重新 `bash build.sh` 即可。

@@ -3,4 +3,4 @@
 Dim dir, shell
 dir = CreateObject("Scripting.FileSystemObject").GetParentFolderName(WScript.ScriptFullName)
 Set shell = CreateObject("WScript.Shell")
-shell.Run "powershell -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File """ & dir & "\glm-usage-widget.ps1"" -NoShowIfExists", 0, False
+shell.Run "powershell -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File """ & dir & "\zcode-usage-widget.ps1"" -NoShowIfExists", 0, False

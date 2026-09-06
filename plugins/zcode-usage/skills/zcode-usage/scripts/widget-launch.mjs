@@ -3,8 +3,8 @@
  * 跨平台悬浮窗启动器(插件 SessionStart hook 每会话调用一次)
  *
  * 按当前设备选择对应 UI 的悬浮窗:
- *   Windows → WPF 磨砂玻璃卡片(glm-usage-widget.ps1,经 widget-launch.vbs)
- *   macOS   → 原生 GLMUsageHUD.app(需先在 macos/ 目录执行一次 bash build.sh)
+ *   Windows → WPF 磨砂玻璃卡片(zcode-usage-widget.ps1,经 widget-launch.vbs)
+ *   macOS   → 原生 ZCodeUsageHUD.app(需先在 macos/ 目录执行一次 bash build.sh)
  *   其他    → 静默跳过
  *
  * 语义:已有实例在运行时,通过 touch 唤醒文件把它唤回显示(不抢焦点);没有则静默拉起。
@@ -19,7 +19,7 @@ const dir = path.dirname(fileURLToPath(import.meta.url));
 
 if (process.platform === 'win32') {
   // 先 touch 唤醒文件:已在运行的悬浮窗 250ms 内轮询到 mtime 变化即唤回(毫秒级、不再新起 PowerShell)
-  const wakeFile = path.join(os.homedir(), '.zcode', 'scripts', 'glm-usage-widget.wake');
+  const wakeFile = path.join(os.homedir(), '.zcode', 'scripts', 'zcode-usage-widget.wake');
   const now = new Date();
   try { fs.utimesSync(wakeFile, now, now); } catch {
     try { fs.mkdirSync(path.dirname(wakeFile), { recursive: true }); fs.writeFileSync(wakeFile, ''); } catch { }
@@ -33,12 +33,12 @@ if (process.platform === 'win32') {
 }
 
 if (process.platform === 'darwin') {
-  // macOS:优先找已编译的 GLMUsageHUD.app(插件内 build 产物 → 用户/系统应用目录)
+  // macOS:优先找已编译的 ZCodeUsageHUD.app(插件内 build 产物 → 用户/系统应用目录)
   const pluginRoot = path.resolve(dir, '..', '..', '..');
   const candidates = [
-    path.join(pluginRoot, 'macos', 'GLMUsageHUD.app'),
-    path.join(os.homedir(), 'Applications', 'GLMUsageHUD.app'),
-    path.join('/Applications', 'GLMUsageHUD.app'),
+    path.join(pluginRoot, 'macos', 'ZCodeUsageHUD.app'),
+    path.join(os.homedir(), 'Applications', 'ZCodeUsageHUD.app'),
+    path.join('/Applications', 'ZCodeUsageHUD.app'),
   ];
   const app = candidates.find((p) => fs.existsSync(p));
   if (app) {

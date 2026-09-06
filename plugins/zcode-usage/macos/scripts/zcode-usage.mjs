@@ -27,7 +27,7 @@ const flagValue = (name) => {
   return i >= 0 ? argv[i + 1] : undefined;
 };
 
-// ---------- 自安装:node glm-usage.mjs --install ----------
+// ---------- 自安装:node zcode-usage.mjs --install ----------
 const COMMAND_MD = `---
 description: 查询智谱 GLM Coding Plan 的 5 小时/每周/每月额度与用量
 ---
@@ -35,10 +35,10 @@ description: 查询智谱 GLM Coding Plan 的 5 小时/每周/每月额度与用
 运行以下命令查询 Coding Plan 用量:
 
 \`\`\`bash
-node ~/.zcode/scripts/glm-usage.mjs
+node ~/.zcode/scripts/zcode-usage.mjs
 \`\`\`
 
-(若 ~ 无法展开,改用: node "$HOME/.zcode/scripts/glm-usage.mjs")
+(若 ~ 无法展开,改用: node "$HOME/.zcode/scripts/zcode-usage.mjs")
 
 然后将输出用简洁的中文表格汇报给用户,必须包含:
 
@@ -55,7 +55,7 @@ node ~/.zcode/scripts/glm-usage.mjs
 
 if (argv.includes('--install')) {
   const home = os.homedir();
-  const scriptDest = path.join(home, '.zcode', 'scripts', 'glm-usage.mjs');
+  const scriptDest = path.join(home, '.zcode', 'scripts', 'zcode-usage.mjs');
   const commandDest = path.join(home, '.zcode', 'commands', 'usage.md');
   fs.mkdirSync(path.dirname(scriptDest), { recursive: true });
   fs.mkdirSync(path.dirname(commandDest), { recursive: true });
@@ -70,25 +70,25 @@ if (argv.includes('--install')) {
 
   // 悬浮窗(仅 Windows,且安装目录里带有 widget 脚本)
   const selfDir = path.dirname(selfPath);
-  const widgetSrc = path.join(selfDir, 'glm-usage-widget.ps1');
+  const widgetSrc = path.join(selfDir, 'zcode-usage-widget.ps1');
   if (process.platform === 'win32' && fs.existsSync(widgetSrc)) {
-    const widgetDest = path.join(home, '.zcode', 'scripts', 'glm-usage-widget.ps1');
+    const widgetDest = path.join(home, '.zcode', 'scripts', 'zcode-usage-widget.ps1');
     fs.copyFileSync(widgetSrc, widgetDest);
     const winPath = widgetDest.replace(/\//g, '\\');
     const vbs = `CreateObject("WScript.Shell").Run "powershell -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File ""${winPath}""", 0, False\r\n`;
-    const launchVbs = path.join(home, '.zcode', 'scripts', 'glm-usage-widget-launch.vbs');
+    const launchVbs = path.join(home, '.zcode', 'scripts', 'zcode-usage-widget-launch.vbs');
     fs.writeFileSync(launchVbs, vbs, 'ascii');
     // 开机自启
     const startupDir = path.join(home, 'AppData', 'Roaming', 'Microsoft', 'Windows', 'Start Menu', 'Programs', 'Startup');
     fs.mkdirSync(startupDir, { recursive: true });
-    fs.writeFileSync(path.join(startupDir, 'glm-usage-widget.vbs'), vbs, 'ascii');
+    fs.writeFileSync(path.join(startupDir, 'zcode-usage-widget.vbs'), vbs, 'ascii');
     // 立即弹出悬浮窗(已有实例在运行时,会自动唤起到前台)
     spawn('wscript.exe', [launchVbs], { detached: true, stdio: 'ignore', windowsHide: true }).unref();
     console.log('  悬浮窗 -> 已安装并启动(置顶显示,每 10 分钟刷新)');
     console.log('           隐藏/唤回:Ctrl+G 全局快捷键;启动 ZCode 时也会自动唤起');
     console.log('           开机自启已开启(悬浮窗右键菜单可关闭)');
   } else if (process.platform === 'win32') {
-    console.log('  悬浮窗 -> 未安装(当前目录没有 glm-usage-widget.ps1;从完整 zip 安装可获得)');
+    console.log('  悬浮窗 -> 未安装(当前目录没有 zcode-usage-widget.ps1;从完整 zip 安装可获得)');
   }
   process.exit(0);
 }
@@ -257,7 +257,7 @@ async function main() {
       const reset = l.nextResetTime > 0 ? `,${countdown(l.nextResetTime - Date.now())}重置` : '';
       parts.push(`${name} ${p.toFixed(0)}%${reset}`);
     }
-    const line = `【GLM Coding Plan 用量】${parts.join(' · ')}(如需详情运行 node ~/.zcode/scripts/glm-usage.mjs)`;
+    const line = `【GLM Coding Plan 用量】${parts.join(' · ')}(如需详情运行 node ~/.zcode/scripts/zcode-usage.mjs)`;
     console.log(JSON.stringify({
       hookSpecificOutput: { hookEventName: 'SessionStart', additionalContext: line },
     }));

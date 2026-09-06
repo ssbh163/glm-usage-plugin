@@ -1,19 +1,19 @@
 #!/bin/bash
 # ============================================================================
-# 文件作用：把 GLMUsageHUD.swift 编译并打包成 macOS 应用包 GLMUsageHUD.app
+# 文件作用：把 ZCodeUsageHUD.swift 编译并打包成 macOS 应用包 ZCodeUsageHUD.app
 #
 # 为什么这样做：
 #   - 打成 .app 才能设置 LSUIElement=true（不占 Dock、不抢焦点）
 #   - 打成 .app 才能用 `open -g` 做「已运行则唤出」的幂等启动
 #   - ad-hoc 签名让应用有稳定身份，避免每次重建后系统重复询问权限
 #
-# 用法：bash ~/.zcode/glm-usage-hud/build.sh
+# 用法：bash ~/.zcode/zcode-usage-hud/build.sh
 # ============================================================================
 set -euo pipefail
 
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-APP="$DIR/GLMUsageHUD.app"
-NAME="GLMUsageHUD"
+APP="$DIR/ZCodeUsageHUD.app"
+NAME="ZCodeUsageHUD"
 
 echo "==> 清理旧的应用包"
 rm -rf "$APP"
@@ -32,9 +32,9 @@ cat > "$APP/Contents/Info.plist" <<'PLIST'
 <plist version="1.0">
 <dict>
     <key>CFBundleExecutable</key>
-    <string>GLMUsageHUD</string>
+    <string>ZCodeUsageHUD</string>
     <key>CFBundleIdentifier</key>
-    <string>com.wangzhe.glmusagehud</string>
+    <string>com.wangzhe.zcodeusagehud</string>
     <key>CFBundleName</key>
     <string>GLM 用量</string>
     <key>CFBundleDisplayName</key>

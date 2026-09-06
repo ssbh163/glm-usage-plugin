@@ -1,14 +1,14 @@
 {
-  "name": "glm-usage-marketplace",
-  "version": "0.1.0",
-  "description": "GLM Coding Plan 用量查询插件市场。",
-  "owner": { "name": "glm-usage contributors" },
+  "name": "zcode-plugins-personal",
+  "description": "个人 ZCode 插件集合",
+  "owner": { "name": "ssbh163" },
   "plugins": [
     {
-      "name": "glm-usage",
-      "source": "./plugins/glm-usage",
+      "name": "zcode-usage",
+      "source": "./plugins/zcode-usage",
       "category": "development",
-      "description": "用于智谱官方API Key登入ZCode查看5小时和周限额"
+      "version": "0.0.2",
+      "description": "支持API KEY与账号登录两种方式查询 GLM Coding Plan 额度(当日高峰/非高峰拆分),悬浮窗展示。"
     }
   ]
 }

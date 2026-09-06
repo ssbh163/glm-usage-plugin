@@ -9,15 +9,15 @@
 //
 // 为什么这样做：
 //   - 用 Swift + AppKit，Mac 自带 Command Line Tools 即可编译，零第三方依赖
-//   - 数据不自己请求接口，而是复用官方 glm-usage.mjs 脚本的 --json 输出，
-//     保证显示口径和终端里 /glm-usage 完全一致，脚本升级后无需改这里
+//   - 数据不自己请求接口，而是复用官方 zcode-usage.mjs 脚本的 --json 输出，
+//     保证显示口径和终端里 /zcode-usage:usage 完全一致，脚本升级后无需改这里
 //   - 全局快捷键走 Carbon RegisterEventHotKey，不需要「辅助功能」授权
 //
 // 支持范围：macOS 12+，Apple Silicon / Intel 均可
 //
 // 注意事项：
 //   - 应用以 accessory 模式运行，不占 Dock，不抢焦点
-//   - 配置文件 ~/.zcode/glm-usage-hud/config.json 可改快捷键和刷新间隔
+//   - 配置文件 ~/.zcode/zcode-usage-hud/config.json 可改快捷键和刷新间隔
 // ============================================================================
 
 import AppKit
@@ -27,7 +27,7 @@ import Carbon.HIToolbox
 
 enum HUDPaths {
     static let home = NSHomeDirectory()
-    static var baseDir: String { home + "/.zcode/glm-usage-hud" }
+    static var baseDir: String { home + "/.zcode/zcode-usage-hud" }
     static var configPath: String { baseDir + "/config.json" }
     /// 官方查询脚本所在的插件缓存根目录
     static var pluginCacheDir: String { home + "/.zcode/cli/plugins/cache" }
@@ -130,7 +130,7 @@ struct ModelUsageDTO: Codable {
     let totalUsage: TotalUsageDTO?
 }
 
-/// 当日用量拆分:高峰期(工作日 14–18 时)/ 非高峰期,由 glm-usage.mjs 计算好
+/// 当日用量拆分:高峰期(工作日 14–18 时)/ 非高峰期,由 zcode-usage.mjs 计算好
 struct UsageSplitSideDTO: Codable {
     let calls: Int?
     let tokens: Double?
@@ -218,7 +218,7 @@ enum Fmt {
     }
 }
 
-// MARK: - 数据抓取：调用官方 glm-usage.mjs --json
+// MARK: - 数据抓取：调用官方 zcode-usage.mjs --json
 
 enum FetchResult {
     case success(UsageRootDTO)
@@ -260,23 +260,23 @@ final class UsageFetcher {
     }
 
     /// 定位官方查询脚本：
-    ///   1. 优先找应用包旁边自带的 scripts/glm-usage.mjs（分享给别人的机器也能用）
+    ///   1. 优先找应用包旁边自带的 scripts/zcode-usage.mjs（分享给别人的机器也能用）
     ///   2. 回退到本机 ZCode 插件缓存，插件版本升级后自动选最新
     static func resolveScript() -> String? {
         let fm = FileManager.default
-        // Bundle.main.bundleURL 是 …/GLMUsageHUD.app/，上一级就是应用所在目录
+        // Bundle.main.bundleURL 是 …/ZCodeUsageHUD.app/，上一级就是应用所在目录
         let local = Bundle.main.bundleURL.deletingLastPathComponent()
-            .appendingPathComponent("scripts/glm-usage.mjs").path
+            .appendingPathComponent("scripts/zcode-usage.mjs").path
         if fm.fileExists(atPath: local) { return local }
 
         let root = HUDPaths.pluginCacheDir
         guard let markets = try? fm.contentsOfDirectory(atPath: root) else { return nil }
         var found: [(version: String, path: String)] = []
         for market in markets {
-            let skillRoot = root + "/" + market + "/glm-usage"
+            let skillRoot = root + "/" + market + "/zcode-usage"
             guard let versions = try? fm.contentsOfDirectory(atPath: skillRoot) else { continue }
             for v in versions {
-                let p = skillRoot + "/" + v + "/skills/glm-usage/scripts/glm-usage.mjs"
+                let p = skillRoot + "/" + v + "/skills/zcode-usage/scripts/zcode-usage.mjs"
                 if fm.fileExists(atPath: p) { found.append((v, p)) }
             }
         }
@@ -320,7 +320,7 @@ final class UsageFetcher {
         DispatchQueue.global(qos: .userInitiated).async {
             guard let script = resolveScript() else {
                 DispatchQueue.main.async {
-                    completion(.failure("找不到 glm-usage.mjs，请确认 glm-usage 插件已安装"), nil)
+                    completion(.failure("找不到 zcode-usage.mjs，请确认 zcode-usage 插件已安装"), nil)
                 }
                 return
             }
