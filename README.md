@@ -16,7 +16,7 @@
 
 | 深色 | 浅色 |
 |:---:|:---:|
-| ![浅色主题下的悬浮窗](assets\mac.jpg) | <img src="assets/windows.png" alt="深色主题下的悬浮窗" style="zoom: 67%;" /> |
+| <img src="assets/mac.jpg" alt="浅色主题下的悬浮窗" style="zoom: 80%;" /> | <img src="assets/windows.png" alt="深色主题下的悬浮窗" style="zoom: 50%;" /> |
 
 进度条颜色随用量变化:绿色(充足)→ 橙色(≥60%)→ 红色(≥85%)。对话内 `/zcode-usage:usage` 命令和终端卡片输出同样的数据。
 
